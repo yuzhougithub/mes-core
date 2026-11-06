@@ -38,6 +38,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Local compose only. The dev profile turns on header mode (X-Plant-Id) via
+      # application-dev.yml. Staging and production must not set this profile;
+      # the default mes.auth.mode is jwt and must not trust the client plant header.
+      SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mes
       SPRING_DATASOURCE_USERNAME: mes
       SPRING_DATASOURCE_PASSWORD: mes

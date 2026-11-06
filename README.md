@@ -25,6 +25,10 @@ deploy       Docker Compose
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
+这条 Compose 给 API 设置了 `SPRING_PROFILES_ACTIVE=dev`。`dev` profile 使用 `mes.auth.mode=header`：业务接口认请求头 `X-Plant-Id`（可选 `X-User-Id`）。只用于本机开发。
+
+staging、生产以及其他非 dev 环境不要激活 `dev` profile，必须使用默认的 `jwt`。`jwt` 不信任客户端传来的 `X-Plant-Id`。JWT 尚未实现时，需要工厂上下文的接口会返回 400 `PLANT_REQUIRED`。
+
 - API 健康检查：<http://localhost:8080/actuator/health>
 - OpenAPI：<http://localhost:8080/swagger-ui/index.html>
 - MinIO 控制台：<http://localhost:9001>（`minio` / `minioadmin`）。官方 `minio/minio` 镜像已停止匿名分发，Compose 使用兼容构建 `pgsty/silo`（同一 `server` 命令、端口与 `MINIO_ROOT_*`）。
