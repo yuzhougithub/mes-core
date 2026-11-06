@@ -230,7 +230,9 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 - `enum` / `multi_enum` 的 `options` 1–200 项，`value` 唯一、≤ 64 字符；其他类型不得有 `options`。
 - `validation` 只认架构备忘列出的约束词，且与 `type` 匹配；`pattern` ≤ 200 字符且 RE2J 可编译（A17）。
 - 每厂每实体 ≤ 50 个字段（A19）。
-- 含 `widget`、`x-component`、`x-decorator`、`x-designable-id`、`x-reactions` 的配置拒绝；其他不认识的键原样保留。
+- Schema **写路径严格白名单**（A20）：根仅 `schemaVersion`/`fields`；field 仅 `key`/`type`/`title`/`required`/`options`/`validation`/`layout`；任何未知键或 `widget`/`x-*` → 422 `SCHEMA_UNKNOWN_KEY`。不原样保留未知键。
+- `fields.length` ≤ 50，否则 422 `SCHEMA_TOO_MANY_FIELDS`（A19）。
+- `boolean` + `required`：值可为 `false`；缺 key / null 才算未填（A21）。
 - 与已存配置比对：已有 `key` 的 `type` 不可改；`key` 不能改名（改名 = 删旧加新）。
 
 ### 扩展值 `ext_values`
@@ -240,6 +242,7 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 | 规则 | 约定（A19） |
 | --- | --- |
 | 未知 `key` | 写入时请求里出现配置外的键 → 422 `EXT_UNKNOWN_KEY`，不静默忽略 |
+| `boolean` 必填 | key 必须出现；`false` 合法；`null`/缺省非法（A21） |
 | 读 | 只返回当前配置里有的键；配置外的已存值（字段被删）保留在库里，不返回 |
 | 写 | 以配置字段为准整体替换：配置内的键取请求值，请求未给 = 清空；配置外的已存键原样保留 |
 | 校验 | 每次写入按当前配置校验全部字段：必填、类型、`options`、`validation`；`image` / `file` 校验文件存在且对当前厂可见 |

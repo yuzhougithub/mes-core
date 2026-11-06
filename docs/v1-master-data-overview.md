@@ -149,12 +149,36 @@ V1 登录（`auth` 包，单独迁移 `V3__auth.sql`，不在本竖切 DDL 内�
 - 自定义字段写入 `image` / `file` 值时，校验该键存在于 `cfg_file_object`、对当前厂可见、类型符合字段类型。
 - 无引用文件的清理留到后续（定时任务），V1 不删。
 
-### 自定义字段 `validation.pattern`（防 ReDoS）
+### 自定义字段 `validation.pattern`（防 ReDoS）【已拍板】
 
-- 后端用 RE2J（`com.google.re2j`，线性时间）编译与匹配，不用 `java.util.regex`【假设 A17】。
-- 保存配置时：`pattern` 长度 ≤ 200；RE2J 编译失败（如环视、反向引用）即拒绝 422 `PATTERN_INVALID`。
-- 字符串值长度上限 2000（即使配置未写 `maxLength`），先查长度再匹配。
-- 前端用 JS `RegExp` 只做即时提示，以后端结果为准。由于 RE2 子集基本是 JS 正则的子集，两端结果一致；不一致时以后端为准。
+- 后端**只用** RE2J（`com.google.re2j`）编译与匹配，禁止 `java.util.regex`【假设 A17】。
+- `pattern` 长度上限 **200 字符**（按 Unicode 码点计）；超长 → 422 `PATTERN_TOO_LONG`。
+- 保存配置时用 RE2J 试编译：失败（环视、反向引用、RE2 不支持的语法）→ 422 `PATTERN_INVALID`；不设编译超时（RE2 编译本身线性）。
+- 字符串值长度上限 2000（即使配置未写 `maxLength`），**先查长度再匹配**。
+- 前端可用 JS `RegExp` 做即时提示，**以后端结果为准**。
+
+### 自定义字段 Schema 未知键【已拍板】
+
+写入 `cfg_custom_field_def.schema` 时做**严格白名单**，不静默忽略：
+
+- 根对象只允许：`schemaVersion`、`fields`。
+- 每个 field 对象只允许：`key`、`type`、`title`、`required`、`options`、`validation`、`layout`。
+- `options[]` 只允许：`value`、`label`；`layout` 只允许：`order`、`group`、`span`；`validation` 只允许架构备忘列出的约束词。
+- 出现 `widget`、`x-component`、`x-decorator`、`x-designable-id`、`x-reactions` 或任何未列键 → 422 `SCHEMA_UNKNOWN_KEY`（`errors[].pointer` 指出路径）。
+- **读**配置时：渲染器仍可忽略不认识的键（兼容历史脏数据）；**写**一律拒绝。值对象 `ext_values` 的未知字段 key 见 A19，同样拒绝。
+
+### `boolean` + `required` 与 Switch 语义【已拍板】
+
+- `required: true` 表示请求的 `ext_values`（或表单提交）里**必须出现该 key**，且值类型为布尔；**不要求值为 `true`**。
+- Ant Design `Switch` 未打开 = 值 **`false`**（显式布尔），算已填，可通过必填校验。
+- 缺 key、或值为 `null` / 非布尔 → 422 `EXT_REQUIRED` / `EXT_TYPE`。
+- 前端 Schema 渲染器：`required` 的 boolean 字段初始值用 `false`（受控），不要用 `undefined`。
+
+### 字段数量上限【已拍板】
+
+- 每厂每 `entity_type` 最多 **50** 个字段（硬上限，性能与表单可用性）【假设 A19】。
+- 保存配置时 `fields.length > 50` → 422 `SCHEMA_TOO_MANY_FIELDS`。
+- 单条 `ext_values` JSON ≤ 64 KB；列表/详情仍按性能表目标。
 
 ### Excel 导入导出
 
@@ -215,6 +239,8 @@ V1 开发时：
 | A16 | 跨厂引用一律禁止；`plant_id` 创建后不可改 | 写校验 |
 | A17 | 正则校验用 RE2J，`pattern` ≤ 200 字符，字符串值 ≤ 2000 字符 | 依赖、配置校验 |
 | A18 | 性能基准按单机 4C/8G、单厂 20 万物料、50 并发估算 | 索引、压测 |
-| A19 | 自定义字段：写入时拒绝未知 `key`；每厂每实体 ≤ 50 个字段；配置变更不迁移已存值，下次保存该记录时按新配置整体校验 | 扩展值读写 |
+| A19 | 自定义字段值：写入拒绝未知 `key`；每厂每实体 ≤ 50 字段；配置变更不迁移已存值，下次保存按新配置整体校验 | 扩展值读写 |
+| A20 | 保存字段配置时 Schema 顶层/字段级未知键一律拒绝（白名单）；读侧渲染器可忽略未知键 | 配置接口、PR#3 渲染器 |
+| A21 | `boolean`+`required`：必须出现 key；`false`（Switch 未选）为合法值，不算空 | 校验、前端初始值 |
 
 评审时逐条确认；被推翻的假设在对应文档里改，并删去本表条目。
