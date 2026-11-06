@@ -88,12 +88,12 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 | 409 | `DUPLICATE_CODE`、`STALE_VERSION`、`STATE_CONFLICT`、`IN_USE` | 编码重复、乐观锁、状态不允许（如改已发布）、被引用不能删 |
 | 413 | `PAYLOAD_TOO_LARGE` | 文件或导入超限 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 文件类型不在白名单 |
-| 422 | `VALIDATION_FAILED`、`CROSS_PLANT_REFERENCE`、`RELEASE_CHECK_FAILED`、`PATTERN_INVALID`、`PATTERN_TOO_LONG`、`SCHEMA_UNKNOWN_KEY`、`SCHEMA_TOO_MANY_FIELDS`、`EXPORT_TOO_LARGE` | 字段或业务规则不过；`errors[]` 给明细 |
+| 422 | `VALIDATION_FAILED`、`CROSS_PLANT_REFERENCE`、`RELEASE_CHECK_FAILED`、`PATTERN_INVALID`、`PATTERN_TOO_LONG`、`SCHEMA_UNKNOWN_KEY`、`SCHEMA_TOO_MANY_FIELDS`、`LAYOUT_INVALID`、`LAYOUT_TOO_LARGE`、`EXPORT_TOO_LARGE` | 字段或业务规则不过；`errors[]` 给明细 |
 | 500 | `INTERNAL` | 不回显堆栈 |
 
 `errors[]` 每项形如 `{ "field", "code", "message" }`。`field` 为 JSON Pointer 或点路径（配置用 Pointer，如 `/fields/0/widget`；业务体用点路径，如 `values.surface_finish`）。不另设 `pointer` 字段。
 
-`errors[].code` 常用：`REQUIRED`、`TOO_LONG`、`OUT_OF_RANGE`、`PATTERN_MISMATCH`、`PATTERN_TOO_LONG`、`DICT_VALUE_INVALID`、`EXT_UNKNOWN_KEY`、`EXT_TYPE_MISMATCH`、`EXT_OPTION_INVALID`、`SCHEMA_UNKNOWN_KEY`、`SCHEMA_TOO_MANY_FIELDS`、`FILE_NOT_FOUND`、`BOM_CYCLE`、`REF_OBSOLETE`。
+`errors[].code` 常用：`REQUIRED`、`TOO_LONG`、`OUT_OF_RANGE`、`PATTERN_MISMATCH`、`PATTERN_TOO_LONG`、`DICT_VALUE_INVALID`、`EXT_UNKNOWN_KEY`、`EXT_TYPE_MISMATCH`、`EXT_OPTION_INVALID`、`SCHEMA_UNKNOWN_KEY`、`SCHEMA_TOO_MANY_FIELDS`、`LAYOUT_INVALID`、`LAYOUT_TOO_LARGE`、`FILE_NOT_FOUND`、`BOM_CYCLE`、`REF_OBSOLETE`。
 
 ### 授权
 
@@ -149,10 +149,10 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 | `/operations` | CRUD | 按范围 | 无版本，用 `enabled` |
 | `/operations/{id}/plant-ext` | `GET` `PUT` | 读 / 写本厂 | `{ enabled, defaultWorkCenterId, stdTimeSec, values, lockVersion }` |
 | `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`、可选 `layout`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id；请求里的主序视觉边不要传（或忽略）。唯一键为 `(code, plant_id, version_no)`，共享与厂专用可同 `code` 并存。画布投影见 [架构备忘](architecture.md#工艺路线画布) |
-| `/routings/{id}/release` / `obsolete` / `copy` | `POST` | 按范围 | 同 BOM：`copy` 可指定 `scope=PLANT` 从共享复制为厂专用；发布只作废同 `(code, plant_id)` 的旧 `RELEASED` |
+| `/routings/{id}/release` / `obsolete` / `copy` | `POST` | 按范围 | 同 BOM：`copy` 可指定 `scope=PLANT` 从共享复制为厂专用，并复制 `layout`；发布只作废同 `(code, plant_id)` 的旧 `RELEASED`，发布后布局冻结 |
 | `/routings/effective` | `GET` | 读 | `?materialId=` 或 `?code=` → 当前厂生效发布版本（厂专用优先于共享，A8） |
 
-`PUT /routings/{id}` 体在原有头字段与 `steps` / `edges` 之外可带：
+`PUT /routings/{id}` 体在原有头字段与 `steps` / `edges` 之外可带 `layout`（仅 `DRAFT`；非草稿 → 409 `STATE_CONFLICT`）：
 
 ```json
 {
@@ -163,7 +163,9 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 }
 ```
 
-`layout` 可空；省略表示不改已存布局，显式 `null` 清空。服务端只做形状与 64 KB 体积校验，不参与发布规则。
+`layout` 白名单与拒绝策略见 [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)：根仅 `schemaVersion`/`nodes`；节点仅 `x`/`y`；`nodes` 键必须属于本请求 `steps[].stepNo`（含返工）；未知键或孤儿键 → 422 `LAYOUT_INVALID`（**拒绝，不裁剪**）；序列化 > 64 KB → 422 `LAYOUT_TOO_LARGE`。省略 `layout` = 不改；显式 `null` = 清空。不参与发布业务规则。
+
+`POST /routings/{id}/copy` 将源版本的 `layout_json` **一并复制**到新草稿（V1 保持 `stepNo`，坐标键可直拷）。
 
 ### resource
 

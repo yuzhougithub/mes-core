@@ -191,11 +191,11 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 | `name` | `varchar(200)` | |
 | `material_id` | `uuid` → `mat_material` | 适用产品，可空 = 通用 |
 | `status` 等 | | 同 BOM；`uk_rtg_routing_released`：同 `(code, plant_id)` 至多一个 `RELEASED`（共享与厂专用可并存，A8） |
-| `layout_json` | `jsonb` | 可空。画布节点坐标，形状见 [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)；**不进**发布 / 业务校验（A23） |
+| `layout_json` | `jsonb` | 可空。画布节点坐标；白名单见架构备忘（未知键 / 孤儿 step 键拒绝）；仅草稿可写，发布后冻结；**不进**发布业务校验（A23） |
 
 ### `rtg_routing_step` 工序节点（子表）
 
-`routing_id`（级联删）、`step_no int > 0`（路线内唯一，建议 10、20、30）、`operation_id`、`work_center_id`（仅厂专用路线可填，A9）、`is_rework`（返工专用节点，不在主路线上）、`std_time_sec`、`remark`。
+`routing_id`（级联删）、`step_no int > 0`（**含返工节点在内**整条路线唯一，对应 `uk_rtg_routing_step_no`；建议主路线 10、20、30，返工另号段）、`operation_id`、`work_center_id`（仅厂专用路线可填，A9）、`is_rework`（返工专用节点，不在主路线上）、`std_time_sec`、`remark`。
 
 ### `rtg_routing_edge` 返工边（子表）
 

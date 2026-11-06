@@ -331,7 +331,7 @@ CREATE TABLE rtg_routing (
     released_at   timestamptz,
     released_by   uuid,
     remark        varchar(500),
-    layout_json   jsonb,                                 -- 画布坐标，可空；不进业务校验
+    layout_json   jsonb,                                 -- 画布坐标，可空；仅草稿可写；白名单见架构备忘
     lock_version  integer      NOT NULL DEFAULT 0,
     deleted       boolean      NOT NULL DEFAULT false,
     created_at    timestamptz  NOT NULL DEFAULT now(),
@@ -355,7 +355,7 @@ CREATE TABLE rtg_routing_step (
     is_rework       boolean        NOT NULL DEFAULT false,
     std_time_sec    numeric(12, 2) CHECK (std_time_sec >= 0),
     remark          varchar(500),
-    CONSTRAINT uk_rtg_routing_step_no UNIQUE (routing_id, step_no)
+    CONSTRAINT uk_rtg_routing_step_no UNIQUE (routing_id, step_no)  -- 含返工节点；全路线 step_no 唯一
 );
 
 -- 返工分支边：REWORK 从主路线节点出到返工节点（或回到前序主路线节点）；RETURN 从返工节点回主路线。
