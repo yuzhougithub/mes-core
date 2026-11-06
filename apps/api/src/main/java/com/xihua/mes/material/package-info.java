@@ -1,4 +1,5 @@
 /**
- * 物料分类、计量单位、物料与 BOM。
+ * Material category, UoM, material, BOM.
+ * Stub package — entities/API await architect master-data DDL.
  */
 package com.xihua.mes.material;

@@ -1,4 +1,5 @@
 /**
- * 组织：工厂、车间、工作中心、人员、班组与简单角色。
+ * Organization: plant, workshop, work center, people, crew, simple roles.
+ * Stub package — entities/API await architect master-data DDL.
  */
 package com.xihua.mes.org;
