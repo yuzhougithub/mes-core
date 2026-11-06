@@ -5,7 +5,7 @@
 ## 技术栈
 
 - API：Java 21、Spring Boot 4.1、MyBatis-Plus、Flyway、PostgreSQL、springdoc OpenAPI
-- Web：React、TypeScript、Ant Design、Vite（`apps/web`）
+- Web：React、TypeScript、Ant Design、Vite（`apps/web`）。动态表单 V1 用 Ant Design Form 与自研 Schema 渲染器，不加入 Formily。见 [架构备忘](docs/architecture.md)
 - 运行：Docker Compose（API + PostgreSQL + MinIO）
 
 ## 目录
