@@ -7,7 +7,8 @@ package com.xihua.mes.auth;
  * Do not read request headers or tokens in domain code. Underlying plant storage is
  * {@link PlantContext} (ThreadLocal); JWT will populate the same façade without changing callers.
  * <p>
- * Skeleton: optional {@code userId} from {@code X-User-Id} only when {@code mes.auth.mode=header}.
+ * Optional {@code userId} is taken from {@code X-User-Id} only when {@code mes.auth.mode=header}
+ * (dev/test). Default {@code jwt} does not trust client headers; plant stays unset (fail closed).
  */
 public final class CurrentContext {
 

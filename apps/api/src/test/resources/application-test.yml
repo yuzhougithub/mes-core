@@ -1,0 +1,4 @@
+# Integration tests send X-Plant-Id. Allowed only because the test profile is active (A2).
+mes:
+  auth:
+    mode: header

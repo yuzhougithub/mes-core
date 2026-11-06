@@ -19,8 +19,10 @@ mybatis-plus:
   global-config:
     banner: false
 
-# Skeleton auth: only "header" reads X-Plant-Id / X-User-Id.
-# After JWT lands, set mes.auth.mode=jwt and never trust client plant headers.
+# A2: default is jwt. JWT is not implemented yet, so X-Plant-Id is ignored and
+# plant-scoped calls fail closed (400 PLANT_REQUIRED) until a token fills CurrentContext.
+# Header mode (trust X-Plant-Id) is dev-only: see application-dev.yml. AuthModeGuard
+# refuses to start when mode=header and the active profiles are not dev/test.
 mes:
   auth:
-    mode: header
+    mode: jwt

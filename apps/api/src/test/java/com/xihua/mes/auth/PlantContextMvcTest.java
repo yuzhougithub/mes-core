@@ -12,6 +12,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,6 +23,7 @@ import com.xihua.mes.common.ApiExceptionHandler;
  */
 @WebMvcTest(controllers = PlantRequireTestController.class)
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 @Import({PlantContextFilter.class, ApiExceptionHandler.class})
 @TestPropertySource(properties = "mes.auth.mode=header")
 class PlantContextMvcTest {

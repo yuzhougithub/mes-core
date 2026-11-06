@@ -26,9 +26,13 @@ import com.xihua.mes.common.PlantHeaderInvalidException;
  * Skeleton plant (and optional user) context from request headers.
  * <p>
  * <b>Auth mode:</b> reads {@code X-Plant-Id} / {@code X-User-Id} only when
- * {@code mes.auth.mode=header} (default). Any other value (including future {@code jwt})
- * ignores those headers — JWT must populate {@link CurrentContext} from the token;
- * <b>after JWT lands, never trust a client-supplied {@code X-Plant-Id}</b>.
+ * {@code mes.auth.mode=header}. The default is {@code jwt}. Header mode is dev/test only
+ * ({@link AuthModeGuard}).
+ * <p>
+ * JWT is not implemented yet. In {@code jwt} mode (and any mode other than {@code header})
+ * this filter <b>does not</b> trust a client-supplied {@code X-Plant-Id}. Plant context stays
+ * empty, so business code that calls {@link CurrentContext#requirePlantId()} fails closed
+ * with 400 {@code PLANT_REQUIRED} until a token adapter populates {@link CurrentContext}.
  * <p>
  * Missing {@code X-Plant-Id} does not fail the filter (health / OpenAPI stay reachable);
  * business code uses {@link CurrentContext#requirePlantId()}.
@@ -41,13 +45,14 @@ public class PlantContextFilter extends OncePerRequestFilter {
     public static final String HEADER_PLANT_ID = "X-Plant-Id";
     public static final String HEADER_USER_ID = "X-User-Id";
     public static final String MODE_HEADER = "header";
+    public static final String MODE_JWT = "jwt";
 
     private static final Logger log = LoggerFactory.getLogger(PlantContextFilter.class);
 
     private final String authMode;
 
-    public PlantContextFilter(@Value("${mes.auth.mode:header}") String authMode) {
-        this.authMode = authMode == null ? MODE_HEADER : authMode.trim();
+    public PlantContextFilter(@Value("${mes.auth.mode:jwt}") String authMode) {
+        this.authMode = authMode == null || authMode.isBlank() ? MODE_JWT : authMode.trim();
     }
 
     @Override

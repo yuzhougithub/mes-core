@@ -1,0 +1,5 @@
+# Local development only (A2). Trusts client X-Plant-Id / X-User-Id.
+# Do not activate the dev profile in staging or production.
+mes:
+  auth:
+    mode: header

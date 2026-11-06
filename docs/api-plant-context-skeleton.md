@@ -7,11 +7,16 @@ Branch `feat/api-plant-context-skeleton` (based on `main`), plus follow-up
 
 - **Business context API**: prefer **`CurrentContext.requirePlantId()`** / `plantId()` / `userId()`.
   `PlantContext` remains the ThreadLocal store written by the filter (and later JWT).
-- **Auth mode** (`mes.auth.mode`, default `header`):
-  - `header` — read `X-Plant-Id` / `X-User-Id` (dev/skeleton only).
-  - any other value (e.g. future `jwt`) — **ignore** those headers.
-  - **After JWT lands, never trust a client-supplied `X-Plant-Id`.**
-- Missing `X-Plant-Id` does not fail the filter; business uses `CurrentContext.requirePlantId()`
+- **Auth mode** (`mes.auth.mode`, default `jwt`):
+  - `header` — read `X-Plant-Id` / `X-User-Id`. Enabled only by `application-dev.yml` and test
+    config (`application-test.yml` + profile `test`). If mode is `header` and the active
+    profiles are not all `dev`/`test` (including no profile, `staging`, `prod`), startup fails
+    (`AuthModeGuard`, A2).
+  - `jwt` (default) — **do not trust** a client-supplied `X-Plant-Id`. JWT is not implemented
+    yet, so this fails closed: the filter leaves plant context empty and
+    `CurrentContext.requirePlantId()` returns HTTP 400 **`PLANT_REQUIRED`**. A forged header
+    is ignored, not accepted.
+- Missing `X-Plant-Id` in header mode does not fail the filter; business uses `CurrentContext.requirePlantId()`
   → `PlantRequiredException` → HTTP 400 **`PLANT_REQUIRED`** (RFC 9457 Problem Details).
 - Present-but-blank or multi-value `X-Plant-Id` → HTTP 400 `PLANT_HEADER_INVALID` (`application/problem+json`).
 - Errors from `ApiExceptionHandler`: `ProblemDetail` with `code`, `errors[]`, `traceId`.
@@ -26,7 +31,8 @@ Branch `feat/api-plant-context-skeleton` (based on `main`), plus follow-up
 
 | Topic | Convention |
 | --- | --- |
-| Header trust | Only `mes.auth.mode=header` |
+| Header trust | Only `mes.auth.mode=header`, and only with profile `dev` or `test` |
+| Default mode | `jwt` (fail closed until a token adapter exists) |
 | Missing plant | 400 `PLANT_REQUIRED` (not `PLANT_NOT_SET`) |
 | Invalid header | 400 `PLANT_HEADER_INVALID` |
 | Error body | RFC 9457 `application/problem+json` |

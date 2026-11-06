@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,8 +19,12 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Full Boot + Flyway V1/V2 on embedded PostgreSQL 17, MockMvc, header auth mode. */
-@SpringBootTest(properties = "mes.auth.mode=header")
+/**
+ * Full Boot + Flyway V1/V2 on embedded PostgreSQL 17, MockMvc.
+ * Header auth ({@code X-Plant-Id}) comes from {@code application-test.yml} under the {@code test} profile (A2).
+ */
+@SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 public abstract class PgIntegrationTest {
 
