@@ -13,7 +13,7 @@
 ```
 apps/api     Spring Boot 模块化单体
 apps/web     PC 端骨架
-docs         章程与架构备忘
+docs         章程、架构备忘、V1 竖切规格
 deploy       Docker Compose
 ```
 
@@ -53,3 +53,4 @@ cd apps/web && npm ci && npm run build
 
 - [V1 主数据章程](docs/charter-v1-master-data.md)
 - [架构备忘](docs/architecture.md)
+- V1 主数据竖切（草案）：[总览](docs/v1-master-data-overview.md)、[数据模型](docs/v1-data-model.md)、[接口规范](docs/v1-api.md)、[Flyway 草案](docs/sql/V2__master_data.sql)
