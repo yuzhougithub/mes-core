@@ -9,6 +9,7 @@ import {
   Row,
   Select,
   Switch,
+  Typography,
   Upload,
   type UploadFile,
   type UploadProps,
@@ -97,10 +98,25 @@ function buildRules(field: FieldDef): Rule[] {
       })
     }
     if (v.pattern) {
-      rules.push({
-        pattern: new RegExp(v.pattern),
-        message: `${field.title}格式不正确`,
-      })
+      if (v.pattern.length > 200) {
+        console.warn(
+          `[SchemaForm] skip pattern for field "${field.key}": length ${v.pattern.length} > 200`,
+          v.pattern,
+        )
+      } else {
+        try {
+          rules.push({
+            pattern: new RegExp(v.pattern),
+            message: `${field.title}格式不正确`,
+          })
+        } catch (err) {
+          console.warn(
+            `[SchemaForm] skip invalid pattern for field "${field.key}":`,
+            v.pattern,
+            err,
+          )
+        }
+      }
     }
   }
 
@@ -233,8 +249,17 @@ function FieldControl({ field }: { field: FieldDef }) {
       return <StorageUpload kind="image" />
     case 'file':
       return <StorageUpload kind="file" />
-    default:
-      return null
+    default: {
+      const unknownType = (field as FieldDef & { type: string }).type
+      if (import.meta.env.DEV) {
+        console.warn(`[SchemaForm] unsupported field type: ${unknownType}`, field)
+      }
+      return (
+        <Typography.Text type="warning">
+          {`不支持的字段类型：${unknownType}`}
+        </Typography.Text>
+      )
+    }
   }
 }
 
