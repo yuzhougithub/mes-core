@@ -11,6 +11,15 @@
 | `config` | 自定义字段、数据字典、不良/原因代码、编码规则 |
 | `auth` | 登录与按工厂授权（JWT，尚未实现） |
 
+### V1 竖切文档索引
+
+第一竖切「主数据管理 PC」的规格（草案，待评审）：
+
+- [竖切总览](v1-master-data-overview.md)：边界、共享与厂级扩展、统一约定、认证、安全、性能、假设
+- [数据模型](v1-data-model.md)
+- [接口规范](v1-api.md)
+- [Flyway 草案](sql/V2__master_data.sql)：评审后由后端移入 migration
+
 ## 工厂隔离
 
 部署形态是私有化多工厂，不是 SaaS 多租户。
@@ -117,7 +126,7 @@
 | `group` | 分组标题 |
 | `span` | 1–24 的列宽提示，不是某个组件库的参数 |
 
-不要写入 `widget`、`x-component`、`x-decorator`、`x-designable-id`、Formily 的 `x-reactions`，或其他渲染库专有字段。渲染器忽略不认识的键；存储原样保留。
+不要写入 `widget`、`x-component`、`x-decorator`、`x-designable-id`、Formily 的 `x-reactions`，或其他渲染库专有字段。读侧渲染器可忽略不认识的键；写入配置时按白名单校验，未知键拒绝，不入库（见总览 A20）。
 
 迁到 FormRender 时，映射层把同一份 `fields` 收成 JSON Schema：`properties` 以 `key` 为名，`type` 按下表投影，字段级 `required: true` 收成对象级 `required` 数组，`options` 交给对应控件，`layout` 只进布局适配。
 
