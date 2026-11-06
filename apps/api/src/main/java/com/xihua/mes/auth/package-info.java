@@ -1,4 +1,6 @@
 /**
- * 认证与工厂范围授权。后续接入 JWT。
+ * Auth and plant-scoped access.
+ * Skeleton: {@link com.xihua.mes.auth.PlantContext} + {@code X-Plant-Id} filter only;
+ * no JWT, no token issuance, no plant persistence yet.
  */
 package com.xihua.mes.auth;
