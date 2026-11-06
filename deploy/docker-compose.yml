@@ -1,0 +1,49 @@
+name: mes
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: mes
+      POSTGRES_USER: mes
+      POSTGRES_PASSWORD: mes
+    ports:
+      - "5432:5432"
+    volumes:
+      - mes-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mes -d mes"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    # Upstream minio/minio is no longer published for anonymous pulls.
+    image: pgsty/silo:RELEASE.2026-10-26T00-00-00Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - mes-minio:/data
+
+  api:
+    build:
+      context: ../apps/api
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mes
+      SPRING_DATASOURCE_USERNAME: mes
+      SPRING_DATASOURCE_PASSWORD: mes
+    ports:
+      - "8080:8080"
+
+volumes:
+  mes-pg:
+  mes-minio:

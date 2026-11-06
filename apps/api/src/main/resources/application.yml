@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: mes-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mes
+    username: mes
+    password: mes
+  flyway:
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false

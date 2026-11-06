@@ -1,0 +1,1 @@
+-- Baseline. Domain tables arrive with the master-data slice.

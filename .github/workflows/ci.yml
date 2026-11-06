@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: mes
+          POSTGRES_USER: mes
+          POSTGRES_PASSWORD: mes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mes -d mes"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: apps/api/pom.xml
+      - name: Verify API
+        working-directory: apps/api
+        run: ./mvnw -B verify
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Build web
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
