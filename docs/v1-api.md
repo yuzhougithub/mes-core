@@ -148,7 +148,7 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 | --- | --- | --- | --- |
 | `/operations` | CRUD | 按范围 | 无版本，用 `enabled` |
 | `/operations/{id}/plant-ext` | `GET` `PUT` | 读 / 写本厂 | `{ enabled, defaultWorkCenterId, stdTimeSec, values, lockVersion }` |
-| `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`、可选 `layout`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id；请求里的主序视觉边不要传（或忽略）。唯一键为 `(code, plant_id, version_no)`，共享与厂专用可同 `code` 并存。画布投影见 [架构备忘](architecture.md#工艺路线画布) |
+| `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`、可选 `layout`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id。请求 `edges[]` 里 `edgeType=MAIN`（画布主序视觉边）**静默忽略、不入库，响应仍 200**（S3 定稿）；只持久化 `REWORK`/`RETURN`；未知 `edgeType` → 422。唯一键为 `(code, plant_id, version_no)`。画布投影见 [架构备忘](architecture.md#工艺路线画布) |
 | `/routings/{id}/release` / `obsolete` / `copy` | `POST` | 按范围 | 同 BOM：`copy` 可指定 `scope=PLANT` 从共享复制为厂专用，并复制 `layout`；发布只作废同 `(code, plant_id)` 的旧 `RELEASED`，发布后布局冻结 |
 | `/routings/effective` | `GET` | 读 | `?materialId=` 或 `?code=` → 当前厂生效发布版本（厂专用优先于共享，A8） |
 
@@ -166,6 +166,8 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 `layout` 白名单与拒绝策略见 [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)：根仅 `schemaVersion`/`nodes`；节点仅 `x`/`y`；**显式**提交时 `nodes` 键必须属于本请求 `steps[].stepNo`（含返工），未知键或孤儿键 → 422 `LAYOUT_INVALID`（拒绝，不裁剪）；序列化 > 64 KB → 422 `LAYOUT_TOO_LARGE`。**省略** `layout` = 保留已存布局，但同事务按新 `steps` 自动剔除孤儿键；显式 `null` = 清空。不参与发布业务规则。
 
 `POST /routings/{id}/copy` 将源版本的 `layout_json` **一并复制**到新草稿（V1 保持 `stepNo`，坐标键可直拷）。
+
+`edges[]` 的 `edgeType`：`REWORK` / `RETURN` 入库；`MAIN` **忽略**（不入库、不视为错误，整单仍 200）；其它值 → 422 `VALIDATION_FAILED`（`errors[].field` 如 `edges[0].edgeType`）。前端可不传 `MAIN`，传了也不必先剥离。
 
 ### resource
 
