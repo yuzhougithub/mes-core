@@ -28,17 +28,33 @@ public enum FieldType {
         return jsonName;
     }
 
-    @JsonCreator
-    public static FieldType fromJson(String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("Field type must not be null");
+    /**
+     * Resolve a wire type for validation paths. Unknown values become
+     * {@link DynamicFormSchemaException} ({@code SCHEMA_INVALID_TYPE}), not a bare IAE.
+     */
+    public static FieldType from(String value) {
+        if (value == null || value.isBlank()) {
+            throw new DynamicFormSchemaException(
+                    DynamicFormSchemaException.CODE_INVALID_TYPE,
+                    "Field type must be a non-blank string");
         }
         for (FieldType type : values()) {
             if (type.jsonName.equals(value)) {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown field type: " + value);
+        throw new DynamicFormSchemaException(
+                DynamicFormSchemaException.CODE_INVALID_TYPE,
+                "Unknown field type: " + value);
+    }
+
+    @JsonCreator
+    public static FieldType fromJson(String value) {
+        try {
+            return from(value);
+        } catch (DynamicFormSchemaException ex) {
+            throw new IllegalArgumentException(ex.getMessage(), ex);
+        }
     }
 
     public boolean requiresOptions() {

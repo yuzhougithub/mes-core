@@ -17,7 +17,7 @@ class PlantContextTest {
 
     @AfterEach
     void tearDown() {
-        PlantContext.clear();
+        CurrentContext.clear();
     }
 
     @Test
@@ -25,14 +25,22 @@ class PlantContextTest {
         assertNull(PlantContext.get());
         PlantContext.set("plant-a");
         assertEquals("plant-a", PlantContext.get());
+        assertEquals("plant-a", CurrentContext.plantId());
         PlantContext.clear();
         assertNull(PlantContext.get());
+    }
+
+    @Test
+    void setRejectsNullAndBlank() {
+        assertThrows(IllegalArgumentException.class, () -> PlantContext.set(null));
+        assertThrows(IllegalArgumentException.class, () -> PlantContext.set("   "));
     }
 
     @Test
     void requireWhenSet() {
         PlantContext.set("plant-b");
         assertEquals("plant-b", PlantContext.require());
+        assertEquals("plant-b", CurrentContext.requirePlantId());
     }
 
     @Test
@@ -42,9 +50,13 @@ class PlantContextTest {
     }
 
     @Test
-    void requireWhenBlankThrows() {
-        PlantContext.set("   ");
-        assertThrows(PlantNotSetException.class, PlantContext::require);
+    void currentContextUserId() {
+        assertNull(CurrentContext.userId());
+        CurrentContext.setUserId("user-1");
+        assertEquals("user-1", CurrentContext.userId());
+        CurrentContext.clear();
+        assertNull(CurrentContext.userId());
+        assertNull(CurrentContext.plantId());
     }
 
     @Test

@@ -16,3 +16,9 @@ mybatis-plus:
     map-underscore-to-camel-case: true
   global-config:
     banner: false
+
+# Skeleton auth: only "header" reads X-Plant-Id / X-User-Id.
+# After JWT lands, set mes.auth.mode=jwt and never trust client plant headers.
+mes:
+  auth:
+    mode: header
