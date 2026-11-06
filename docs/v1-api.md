@@ -163,7 +163,7 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 }
 ```
 
-`layout` 白名单与拒绝策略见 [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)：根仅 `schemaVersion`/`nodes`；节点仅 `x`/`y`；`nodes` 键必须属于本请求 `steps[].stepNo`（含返工）；未知键或孤儿键 → 422 `LAYOUT_INVALID`（**拒绝，不裁剪**）；序列化 > 64 KB → 422 `LAYOUT_TOO_LARGE`。省略 `layout` = 不改；显式 `null` = 清空。不参与发布业务规则。
+`layout` 白名单与拒绝策略见 [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)：根仅 `schemaVersion`/`nodes`；节点仅 `x`/`y`；**显式**提交时 `nodes` 键必须属于本请求 `steps[].stepNo`（含返工），未知键或孤儿键 → 422 `LAYOUT_INVALID`（拒绝，不裁剪）；序列化 > 64 KB → 422 `LAYOUT_TOO_LARGE`。**省略** `layout` = 保留已存布局，但同事务按新 `steps` 自动剔除孤儿键；显式 `null` = 清空。不参与发布业务规则。
 
 `POST /routings/{id}/copy` 将源版本的 `layout_json` **一并复制**到新草稿（V1 保持 `stepNo`，坐标键可直拷）。
 
