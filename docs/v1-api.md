@@ -88,10 +88,12 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 | 409 | `DUPLICATE_CODE`、`STALE_VERSION`、`STATE_CONFLICT`、`IN_USE` | 编码重复、乐观锁、状态不允许（如改已发布）、被引用不能删 |
 | 413 | `PAYLOAD_TOO_LARGE` | 文件或导入超限 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 文件类型不在白名单 |
-| 422 | `VALIDATION_FAILED`、`CROSS_PLANT_REFERENCE`、`RELEASE_CHECK_FAILED`、`PATTERN_INVALID`、`EXPORT_TOO_LARGE` | 字段或业务规则不过；`errors[]` 给明细 |
+| 422 | `VALIDATION_FAILED`、`CROSS_PLANT_REFERENCE`、`RELEASE_CHECK_FAILED`、`PATTERN_INVALID`、`PATTERN_TOO_LONG`、`SCHEMA_UNKNOWN_KEY`、`SCHEMA_TOO_MANY_FIELDS`、`EXPORT_TOO_LARGE` | 字段或业务规则不过；`errors[]` 给明细 |
 | 500 | `INTERNAL` | 不回显堆栈 |
 
-`errors[].code` 常用：`REQUIRED`、`TOO_LONG`、`OUT_OF_RANGE`、`PATTERN_MISMATCH`、`DICT_VALUE_INVALID`、`EXT_UNKNOWN_KEY`、`EXT_TYPE_MISMATCH`、`EXT_OPTION_INVALID`、`FILE_NOT_FOUND`、`BOM_CYCLE`、`REF_OBSOLETE`。
+`errors[]` 每项形如 `{ "field", "code", "message" }`。`field` 为 JSON Pointer 或点路径（配置用 Pointer，如 `/fields/0/widget`；业务体用点路径，如 `values.surface_finish`）。不另设 `pointer` 字段。
+
+`errors[].code` 常用：`REQUIRED`、`TOO_LONG`、`OUT_OF_RANGE`、`PATTERN_MISMATCH`、`PATTERN_TOO_LONG`、`DICT_VALUE_INVALID`、`EXT_UNKNOWN_KEY`、`EXT_TYPE_MISMATCH`、`EXT_OPTION_INVALID`、`SCHEMA_UNKNOWN_KEY`、`SCHEMA_TOO_MANY_FIELDS`、`FILE_NOT_FOUND`、`BOM_CYCLE`、`REF_OBSOLETE`。
 
 ### 授权
 
@@ -146,9 +148,9 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 | --- | --- | --- | --- |
 | `/operations` | CRUD | 按范围 | 无版本，用 `enabled` |
 | `/operations/{id}/plant-ext` | `GET` `PUT` | 读 / 写本厂 | `{ enabled, defaultWorkCenterId, stdTimeSec, values, lockVersion }` |
-| `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id |
-| `/routings/{id}/release` / `obsolete` / `copy` | `POST` | 按范围 | 同 BOM |
-| `/routings/effective` | `GET` | 读 | `?materialId=` 或 `?code=` |
+| `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id。唯一键为 `(code, plant_id, version_no)`，共享与厂专用可同 `code` 并存 |
+| `/routings/{id}/release` / `obsolete` / `copy` | `POST` | 按范围 | 同 BOM：`copy` 可指定 `scope=PLANT` 从共享复制为厂专用；发布只作废同 `(code, plant_id)` 的旧 `RELEASED` |
+| `/routings/effective` | `GET` | 读 | `?materialId=` 或 `?code=` → 当前厂生效发布版本（厂专用优先于共享，A8） |
 
 ### resource
 

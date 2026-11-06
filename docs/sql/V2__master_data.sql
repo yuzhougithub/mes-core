@@ -338,8 +338,10 @@ CREATE TABLE rtg_routing (
     updated_at    timestamptz  NOT NULL DEFAULT now(),
     updated_by    uuid
 );
-CREATE UNIQUE INDEX uk_rtg_routing_version ON rtg_routing (code, version_no) WHERE NOT deleted;
-CREATE UNIQUE INDEX uk_rtg_routing_released ON rtg_routing (code) WHERE status = 'RELEASED' AND NOT deleted;
+CREATE UNIQUE INDEX uk_rtg_routing_version ON rtg_routing (code, plant_id, version_no)
+    NULLS NOT DISTINCT WHERE NOT deleted;
+CREATE UNIQUE INDEX uk_rtg_routing_released ON rtg_routing (code, plant_id)
+    NULLS NOT DISTINCT WHERE status = 'RELEASED' AND NOT deleted;
 CREATE INDEX ix_rtg_routing_material ON rtg_routing (material_id);
 
 -- 工序节点。主路线 = is_rework = false 的节点按 step_no 升序。

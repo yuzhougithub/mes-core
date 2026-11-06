@@ -185,12 +185,12 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 
 | 列 | 类型 | 约束 / 说明 |
 | --- | --- | --- |
-| `plant_id` | `uuid` | 空 = 共享；非空 = 厂专用。同一 `code` 的各版本范围相同 |
-| `code` | `varchar(64)` | `(code, version_no)` 唯一 |
+| `plant_id` | `uuid` | 空 = 共享；非空 = 厂专用。同一 `(code, plant_id)` 范围固定（创建后 `plant_id` 不可改） |
+| `code` | `varchar(64)` | `(code, plant_id, version_no)` 唯一（`NULLS NOT DISTINCT`） |
 | `version_no` | `varchar(16)` | |
 | `name` | `varchar(200)` | |
 | `material_id` | `uuid` → `mat_material` | 适用产品，可空 = 通用 |
-| `status` 等 | | 同 BOM；`uk_rtg_routing_released`：同编码至多一个 `RELEASED` |
+| `status` 等 | | 同 BOM；`uk_rtg_routing_released`：同 `(code, plant_id)` 至多一个 `RELEASED`（共享与厂专用可并存，A8） |
 
 ### `rtg_routing_step` 工序节点（子表）
 
@@ -256,7 +256,7 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 
 项（共享型，根）：`dict_type_id`、`plant_id`（空 = 共享项，非空 = 厂追加项）、`value`（字典内唯一，创建后不可改）、`label`、`sort_no`、`enabled`。被引用的项只能停用。
 
-字典给内置列用（如 `material_type`）。自定义字段的选项写在字段自己的 `options` 里，不引用字典【假设】。
+字典给内置列用（如 `material_type`）。自定义字段的选项写在字段自己的 `options` 里，不引用字典【假设 A22】。
 
 ### `cfg_defect_code` 不良代码 / `cfg_reason_code` 原因代码（共享型，根）
 

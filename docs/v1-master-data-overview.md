@@ -120,7 +120,7 @@ V1 登录（`auth` 包，单独迁移 `V3__auth.sql`，不在本竖切 DDL 内�
 | `EDITOR` | 另加：维护本厂私有数据与厂扩展值（含厂专用 BOM / 路线的发布与作废），导入 |
 | `ADMIN` | 另加：维护共享主数据（`plant_id` 为空的记录）及其发布与作废、工厂、角色授予、自定义字段配置、字典、编码规则 |
 
-权限点只到这三档，不做菜单 / 按钮级授权。`header` 模式下视为 `ADMIN`。
+权限点只到这三档，不做菜单 / 按钮级授权。`header` 模式下角色视为 `ADMIN`，但仍校验 `X-Plant-Id` 对应工厂存在；不存在 → 403 `PLANT_FORBIDDEN`。不做菜单 / 按钮级授权。
 
 ## 跨厂引用
 
@@ -164,14 +164,14 @@ V1 登录（`auth` 包，单独迁移 `V3__auth.sql`，不在本竖切 DDL 内�
 - 根对象只允许：`schemaVersion`、`fields`。
 - 每个 field 对象只允许：`key`、`type`、`title`、`required`、`options`、`validation`、`layout`。
 - `options[]` 只允许：`value`、`label`；`layout` 只允许：`order`、`group`、`span`；`validation` 只允许架构备忘列出的约束词。
-- 出现 `widget`、`x-component`、`x-decorator`、`x-designable-id`、`x-reactions` 或任何未列键 → 422 `SCHEMA_UNKNOWN_KEY`（`errors[].pointer` 指出路径）。
+- 出现 `widget`、`x-component`、`x-decorator`、`x-designable-id`、`x-reactions` 或任何未列键 → 422 `SCHEMA_UNKNOWN_KEY`（`errors[].field` 用 JSON Pointer，如 `/fields/0/widget`）。
 - **读**配置时：渲染器仍可忽略不认识的键（兼容历史脏数据）；**写**一律拒绝。值对象 `ext_values` 的未知字段 key 见 A19，同样拒绝。
 
 ### `boolean` + `required` 与 Switch 语义【已拍板】
 
 - `required: true` 表示请求的 `ext_values`（或表单提交）里**必须出现该 key**，且值类型为布尔；**不要求值为 `true`**。
 - Ant Design `Switch` 未打开 = 值 **`false`**（显式布尔），算已填，可通过必填校验。
-- 缺 key、或值为 `null` / 非布尔 → 422 `EXT_REQUIRED` / `EXT_TYPE`。
+- 缺 key、或值为 `null` / 非布尔 → 422，`errors[].code` 为 `REQUIRED` / `EXT_TYPE_MISMATCH`（与接口规范一致）。
 - 前端 Schema 渲染器：`required` 的 boolean 字段初始值用 `false`（受控），不要用 `undefined`。
 
 ### 字段数量上限【已拍板】
@@ -186,6 +186,11 @@ V1 登录（`auth` 包，单独迁移 `V3__auth.sql`，不在本竖切 DDL 内�
 - 解压炸弹防护：限制解压后大小（POI `ZipSecureFile` 默认阈值）。
 - 导出时以 `=`、`+`、`-`、`@`、制表符开头的单元格加前导 `'`，防公式注入。
 - 模板、校验、失败报告的格式见 [接口规范](v1-api.md)「导入导出」。
+
+### CSRF
+
+- Access token 放 `Authorization: Bearer`，浏览器不自动带，**不需要 CSRF**。
+- Refresh token 仅 `HttpOnly` cookie，路径限 `/api/v1/auth`；对该路径的写请求（`refresh` / `logout`）校验 `Origin`/`Referer` 同源，或要求自定义头 `X-Requested-With: XMLHttpRequest`。登录响应不设可被脚本读的 CSRF cookie。
 
 ### 其他
 
@@ -225,7 +230,7 @@ V1 开发时：
 | A2 | 骨架期当前工厂取请求头 `X-Plant-Id`、用户取 `X-User-Id`（仅 dev）；V1 交付前切到 JWT，只换 `CurrentContext` 实现，接口不变 | 所有接口 |
 | A3 | 物料不做多版本，状态即生命周期；图号版次放 `drawing_no` 或自定义字段 | 物料表 |
 | A4 | 发布新 BOM / 路线版本自动作废同范围旧发布版本；V1 无生效日期 | 发布逻辑 |
-| A5 | 编码全局唯一（共享型与全局表）；厂私有数据也占全局编码空间，避免跨厂同码歧义 | 唯一索引 |
+| A5 | 共享型表与全局表的 `code` 全局唯一；厂自有表的 `code` 厂内唯一（与「统一约定」一致）。共享型的厂私有行（`plant_id` 非空）仍占全局编码空间 | 唯一索引 |
 | A6 | V1 自定义字段只开放给 物料、工序、人员（任职）、车间、工作中心、设备。BOM / 路线需要时按同模式加 `*_plant_ext` | `entity_type` 枚举 |
 | A7 | 自定义字段配置每厂每实体一份，没有集团级默认配置；字段 `key`、`type` 定后不可改，删字段只从配置移除，已存值保留不显示 | 配置接口、校验 |
 | A8 | BOM / 路线的厂级差异用「厂专用版本」表达（`plant_id` 非空），取用时厂专用发布版本优先于共享发布版本 | 取版本规则 |
@@ -242,5 +247,6 @@ V1 开发时：
 | A19 | 自定义字段值：写入拒绝未知 `key`；每厂每实体 ≤ 50 字段；配置变更不迁移已存值，下次保存按新配置整体校验 | 扩展值读写 |
 | A20 | 保存字段配置时 Schema 顶层/字段级未知键一律拒绝（白名单）；读侧渲染器可忽略未知键 | 配置接口、PR#3 渲染器 |
 | A21 | `boolean`+`required`：必须出现 key；`false`（Switch 未选）为合法值，不算空 | 校验、前端初始值 |
+| A22 | 自定义字段 `options` 自包含，不引用数据字典 | 配置、字典边界 |
 
 评审时逐条确认；被推翻的假设在对应文档里改，并删去本表条目。
