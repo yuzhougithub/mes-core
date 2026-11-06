@@ -19,6 +19,7 @@
 - [数据模型](v1-data-model.md)
 - [接口规范](v1-api.md)
 - [Flyway 草案](sql/V2__master_data.sql)：评审后由后端移入 migration
+- 本文「工艺路线画布」：编辑器视图选型与投影规则
 
 ## 工厂隔离
 
@@ -139,3 +140,87 @@
 | `multi_enum` | `{ "type": "array", "items": { "type": "string", "enum": ["<options[].value>"] } }` |
 | `boolean` | `{ "type": "boolean" }` |
 | `image`、`file` | `{ "type": "string" }`。控件由映射层另接，不把 `image` / `file` 写进 JSON Schema 的 `type` |
+
+## 工艺路线画布
+
+确认于 2026-11-06（产品拍板）。工艺路线**编辑**用流程画布；持久化与发布校验仍走领域模型，不另起一套图库模型。
+
+### 选型
+
+| 项 | 约定 |
+| --- | --- |
+| 库 | `@xyflow/react`（React Flow） |
+| 不用 | `@xrenders/xflow`、Formily Designable、XFlow 自带 FormRender |
+| 右侧属性面板 | Ant Design Form（与自定义字段 Schema 渲染器同一套路：业务字段受控表单，不上画布库自带表单） |
+| V1 范围 | 草稿编辑 + 可选自动布局；**不做**运行态高亮、仿真、执行进度 |
+
+### 职责边界
+
+- **画布** = 编辑器视图。拖拽、连线、选中、自动排布只影响前端交互与可选布局坐标。
+- **领域真相** = `rtg_routing` + `rtg_routing_step` + `rtg_routing_edge`（见 [数据模型](v1-data-model.md#routing)）。
+- 主路线：`is_rework = false` 的节点按 `step_no` 升序；**不靠边表达主序**（A9）。画布上可画「主序连线」仅作视觉辅助，保存时不落 `rtg_routing_edge`。
+- 返工：只用边。`REWORK` 从主路线节点出（到返工节点，或回到前序主路线节点）；`RETURN` 从返工节点回主路线。
+
+### 节点与边（画布 ↔ 领域）
+
+| 画布 | 领域 | 说明 |
+| --- | --- | --- |
+| 节点类型 `OPERATION` | `rtg_routing_step`，`is_rework = false` | 主路线工序节点；属性含 `stepNo`、`operationId`、可选 `workCenterId`（仅厂专用路线）、`stdTimeSec`、`remark` |
+| 节点类型 `REWORK_OPERATION` | `rtg_routing_step`，`is_rework = true` | 返工专用节点，不在主路线排序里 |
+| 边类型 `MAIN`（可选、仅视觉） | **不持久化** | 主序相邻节点；保存时丢弃，加载时按 `step_no` 升序重画 |
+| 边类型 `REWORK` | `rtg_routing_edge.edge_type = REWORK` | 可带 `defectCodeId` |
+| 边类型 `RETURN` | `rtg_routing_edge.edge_type = RETURN` | 返工回主路线 |
+
+客户端临时节点用本地 `clientKey`（或 React Flow `id`）；提交时 `steps[]` / `edges[]` 仍用 `stepNo` 互指（与现有 API 一致），服务端落库后换成 UUID。
+
+### 投影规则
+
+**保存（画布 → 领域，写 `PUT /routings/{id}`）**
+
+1. 收集所有 `OPERATION` / `REWORK_OPERATION` 节点 → `steps[]`（`stepNo`、`operationId`、`isRework`、…）。主路线节点的 `stepNo` 必须唯一且 > 0；建议 10、20、30。
+2. 只把 `REWORK` / `RETURN` 边写入 `edges[]`（`fromStepNo`、`toStepNo`、`edgeType`、`defectCodeId`）。忽略或剥离 `MAIN` 边。
+3. 可选：把各节点画布坐标写入 `layout`（见下），与业务字段同请求提交；**服务端不对坐标做业务校验**，只做形状与体积限制。
+4. 业务校验与发布规则与现有一致（至少一个主路线节点；每个返工节点至少一条入 `REWORK`、一条出 `RETURN`；`REWORK` 回主路线时只能指向 `step_no` ≤ 起点的节点；工序未停用；跨厂规则等）。画布不另设校验通道。
+
+**加载（领域 → 画布）**
+
+1. `steps[]` → 节点：`isRework` 决定类型；标签优先显示工序名称（前端另查工序列表）。
+2. 按主路线 `step_no` 升序生成视觉 `MAIN` 边（不来自库）。
+3. `edges[]` → `REWORK` / `RETURN` 边。
+4. 若有 `layout.nodes[stepNo]`，用其 `{ x, y }`；否则走自动布局（见下）。
+
+### 布局 `layout`（可选，不进业务）
+
+存在 `rtg_routing.layout_json`（`jsonb`，可空）。API 字段名 `layout`。
+
+```json
+{
+  "schemaVersion": 1,
+  "nodes": {
+    "10": { "x": 120, "y": 80 },
+    "20": { "x": 320, "y": 80 },
+    "30": { "x": 320, "y": 220 }
+  }
+}
+```
+
+| 规则 | 约定 |
+| --- | --- |
+| 用途 | 仅编辑器坐标；发布 / 作废 / 生效查询均不读 |
+| 键 | `nodes` 的键 = 该版本内 `stepNo` 的十进制字符串 |
+| 校验 | 可选对象；未知顶层键拒绝；单路线序列化后 ≤ 64 KB；坐标为有限 number |
+| 缺失 | `layout == null` 或某 `stepNo` 无坐标 → 前端自动布局（V1 可用简单分层：主路线横排，返工节点放在对应 `REWORK` 起点下方） |
+| 复制 | `POST .../copy` 时一并复制 `layout_json`；若复制后改了 `stepNo`，前端或服务端按映射重写键（V1：copy 保持 stepNo 不变，直接拷贝） |
+
+### 右侧属性
+
+- 选中节点 / 边 → 右侧 Ant Design Form 编辑领域字段（工序、工作中心、工时、不良代码等）。
+- 不使用 XFlow / Designable 的属性面板或 FormRender。
+- 路线头信息（编码、版本、名称、适用物料、备注）仍在页头或侧栏普通表单，不塞进节点。
+
+### 明确不做（V1）
+
+- 运行态高亮、在制品位置、仿真节拍。
+- 把主序边写入 `rtg_routing_edge`。
+- 在布局 JSON 里存业务字段或校验规则。
+- 引入第二套流程引擎或 BPMN 交换格式。

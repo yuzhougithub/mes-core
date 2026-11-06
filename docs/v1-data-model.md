@@ -191,6 +191,7 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 | `name` | `varchar(200)` | |
 | `material_id` | `uuid` → `mat_material` | 适用产品，可空 = 通用 |
 | `status` 等 | | 同 BOM；`uk_rtg_routing_released`：同 `(code, plant_id)` 至多一个 `RELEASED`（共享与厂专用可并存，A8） |
+| `layout_json` | `jsonb` | 可空。画布节点坐标，形状见 [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)；**不进**发布 / 业务校验（A23） |
 
 ### `rtg_routing_step` 工序节点（子表）
 
@@ -204,7 +205,7 @@ PK `(team_id, person_id)`。成员与负责人须在该厂有有效任职（应�
 | `edge_type` | `REWORK`：主路线节点 → 返工节点，或 → 前序主路线节点；`RETURN`：返工节点 → 主路线节点 |
 | `defect_code_id` | 触发不良，可空 |
 
-主路线 = `is_rework = false` 的节点按 `step_no` 升序，不用边表达。发布校验：至少一个主路线节点；每个返工节点至少一条入边（`REWORK`）和一条出边（`RETURN`）；`REWORK` 回到主路线时只能指向 `step_no` 不大于起点的节点；工序未停用；范围遵守跨厂规则。
+主路线 = `is_rework = false` 的节点按 `step_no` 升序，不用边表达（画布上的主序连线仅视觉，不落本表）。发布校验：至少一个主路线节点；每个返工节点至少一条入边（`REWORK`）和一条出边（`RETURN`）；`REWORK` 回到主路线时只能指向 `step_no` 不大于起点的节点；工序未停用；范围遵守跨厂规则。编辑器用 `@xyflow/react`，投影规则见架构备忘。
 
 ## resource
 

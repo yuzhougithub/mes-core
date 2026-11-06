@@ -148,9 +148,22 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 | --- | --- | --- | --- |
 | `/operations` | CRUD | 按范围 | 无版本，用 `enabled` |
 | `/operations/{id}/plant-ext` | `GET` `PUT` | 读 / 写本厂 | `{ enabled, defaultWorkCenterId, stdTimeSec, values, lockVersion }` |
-| `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id。唯一键为 `(code, plant_id, version_no)`，共享与厂专用可同 `code` 并存 |
+| `/routings` | CRUD | 按范围 | 过滤 `code`、`materialId`、`status`、`scope`。详情含 `steps[]`、`edges[]`、可选 `layout`；`PUT` 整体替换。边用节点 `stepNo` 引用（不用节点 id），服务端换成 id；请求里的主序视觉边不要传（或忽略）。唯一键为 `(code, plant_id, version_no)`，共享与厂专用可同 `code` 并存。画布投影见 [架构备忘](architecture.md#工艺路线画布) |
 | `/routings/{id}/release` / `obsolete` / `copy` | `POST` | 按范围 | 同 BOM：`copy` 可指定 `scope=PLANT` 从共享复制为厂专用；发布只作废同 `(code, plant_id)` 的旧 `RELEASED` |
 | `/routings/effective` | `GET` | 读 | `?materialId=` 或 `?code=` → 当前厂生效发布版本（厂专用优先于共享，A8） |
+
+`PUT /routings/{id}` 体在原有头字段与 `steps` / `edges` 之外可带：
+
+```json
+{
+  "layout": {
+    "schemaVersion": 1,
+    "nodes": { "10": { "x": 120, "y": 80 }, "20": { "x": 320, "y": 80 } }
+  }
+}
+```
+
+`layout` 可空；省略表示不改已存布局，显式 `null` 清空。服务端只做形状与 64 KB 体积校验，不参与发布规则。
 
 ### resource
 

@@ -5,9 +5,10 @@
 ## 阅读顺序
 
 1. 本文：边界、共享与厂级扩展、统一约定、认证与工厂上下文、跨厂引用、安全、性能、开发环境、假设
-2. [数据模型](v1-data-model.md)：表、约束、状态、ER
-3. [接口规范](v1-api.md)：REST 约定、端点清单、示例
-4. [Flyway 草案](sql/V2__master_data.sql)：可直接执行的 DDL，评审后移入 migration
+2. [架构备忘 · 工艺路线画布](architecture.md#工艺路线画布)：编辑器视图与领域模型投影（`@xyflow/react`）
+3. [数据模型](v1-data-model.md)：表、约束、状态、ER
+4. [接口规范](v1-api.md)：REST 约定、端点清单、示例
+5. [Flyway 草案](sql/V2__master_data.sql)：可直接执行的 DDL，评审后移入 migration
 
 ## 目标
 
@@ -120,7 +121,7 @@ V1 登录（`auth` 包，单独迁移 `V3__auth.sql`，不在本竖切 DDL 内�
 | `EDITOR` | 另加：维护本厂私有数据与厂扩展值（含厂专用 BOM / 路线的发布与作废），导入 |
 | `ADMIN` | 另加：维护共享主数据（`plant_id` 为空的记录）及其发布与作废、工厂、角色授予、自定义字段配置、字典、编码规则 |
 
-权限点只到这三档，不做菜单 / 按钮级授权。`header` 模式下角色视为 `ADMIN`，但仍校验 `X-Plant-Id` 对应工厂存在；不存在 → 403 `PLANT_FORBIDDEN`。不做菜单 / 按钮级授权。
+权限点只到这三档，不做菜单 / 按钮级授权。`header` 模式下角色视为 `ADMIN`，但仍校验 `X-Plant-Id` 对应工厂存在；不存在 → 403 `PLANT_FORBIDDEN`。
 
 ## 跨厂引用
 
@@ -159,7 +160,7 @@ V1 登录（`auth` 包，单独迁移 `V3__auth.sql`，不在本竖切 DDL 内�
 
 ### 自定义字段 Schema 未知键【已拍板】
 
-写入 `cfg_custom_field_def.schema` 时做**严格白名单**，不静默忽略：
+写入 `cfg_custom_field_schema.schema` 时做**严格白名单**，不静默忽略：
 
 - 根对象只允许：`schemaVersion`、`fields`。
 - 每个 field 对象只允许：`key`、`type`、`title`、`required`、`options`、`validation`、`layout`。
@@ -248,5 +249,6 @@ V1 开发时：
 | A20 | 保存字段配置时 Schema 顶层/字段级未知键一律拒绝（白名单）；读侧渲染器可忽略未知键 | 配置接口、PR#3 渲染器 |
 | A21 | `boolean`+`required`：必须出现 key；`false`（Switch 未选）为合法值，不算空 | 校验、前端初始值 |
 | A22 | 自定义字段 `options` 自包含，不引用数据字典 | 配置、字典边界 |
+| A23 | 工艺路线画布用 `@xyflow/react`；持久化仍是 `rtg_routing_step` + `rtg_routing_edge`；节点坐标另存可选 `layout_json`，不进业务校验 | 前端、路线模型 |
 
 评审时逐条确认；被推翻的假设在对应文档里改，并删去本表条目。

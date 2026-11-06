@@ -331,6 +331,7 @@ CREATE TABLE rtg_routing (
     released_at   timestamptz,
     released_by   uuid,
     remark        varchar(500),
+    layout_json   jsonb,                                 -- 画布坐标，可空；不进业务校验
     lock_version  integer      NOT NULL DEFAULT 0,
     deleted       boolean      NOT NULL DEFAULT false,
     created_at    timestamptz  NOT NULL DEFAULT now(),
