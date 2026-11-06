@@ -27,6 +27,9 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>Whole replacement over configured keys: missing / null = cleared; required → {@code REQUIRED}.</li>
  *   <li>{@code boolean} required: {@code false} is a value (A21).</li>
  *   <li>Stored keys outside the schema (deleted fields) are kept as-is and never returned on read.</li>
+ *   <li>On read, a stored value whose JSON shape does not match the current field type is kept
+ *       but omitted (field deleted and recreated as a different type). Tighter rules — options,
+ *       pattern, range, required — do not hide an already stored value (data-model «配置变更»).</li>
  *   <li>Strings ≤ 2000 chars checked <em>before</em> RE2J matching; serialized values ≤ 64 KB.</li>
  * </ul>
  */
@@ -81,19 +84,57 @@ public final class ExtValuesValidator {
         return result;
     }
 
-    /** Read projection: only keys present in the current schema. */
+    /**
+     * Read projection: keys in the current schema whose stored JSON matches that field's type shape.
+     * The stored document is not modified. Shape is the architecture «值的形状» (string, number,
+     * boolean, offset date-time, string array, file key) — not options, pattern, range, or required.
+     */
     public static ObjectNode project(JsonNode schema, JsonNode stored) {
         ObjectNode out = JsonNodeFactory.instance.objectNode();
         if (stored == null || !stored.isObject()) {
             return out;
         }
-        for (String key : fieldsOf(schema).keySet()) {
-            JsonNode v = stored.get(key);
-            if (v != null && !v.isNull()) {
-                out.set(key, v);
+        for (Field field : fieldsOf(schema).values()) {
+            JsonNode v = stored.get(field.key());
+            if (v != null && !v.isNull() && shapeMatches(field.type(), v)) {
+                out.set(field.key(), v);
             }
         }
         return out;
+    }
+
+    /**
+     * JSON shape for {@code type}. Does not apply {@code options}, {@code validation}, or required.
+     */
+    static boolean shapeMatches(FieldType type, JsonNode v) {
+        return switch (type) {
+            case STRING, ENUM, IMAGE, FILE -> v.isString();
+            case NUMBER -> v.isNumber();
+            case BOOLEAN -> v.isBoolean();
+            case DATETIME -> v.isString() && isOffsetDateTime(v.stringValue());
+            case MULTI_ENUM -> {
+                if (!v.isArray()) {
+                    yield false;
+                }
+                boolean ok = true;
+                for (JsonNode item : v) {
+                    if (!item.isString()) {
+                        ok = false;
+                        break;
+                    }
+                }
+                yield ok;
+            }
+        };
+    }
+
+    private static boolean isOffsetDateTime(String value) {
+        try {
+            OffsetDateTime.parse(value);
+            return true;
+        } catch (DateTimeParseException ex) {
+            return false;
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.xihua.mes.material;
 
 import static org.hamcrest.Matchers.hasItem;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -12,7 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.xihua.mes.support.PgIntegrationTest;
 
@@ -31,6 +34,9 @@ class MaterialPlantExtApiTest extends PgIntegrationTest {
               {"key":"rohs","type":"boolean","title":"RoHS","required":true}
             ]}}
             """;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String plantA;
     private String plantB;
@@ -278,6 +284,45 @@ class MaterialPlantExtApiTest extends PgIntegrationTest {
         mvc.perform(delete("/api/v1/uoms/" + uom).param("lockVersion", "0").header("X-Plant-Id", plantA))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("IN_USE"));
+    }
+
+    @Test
+    void readOmitsExtValueWhenFieldIsRecreatedAsADifferentType() throws Exception {
+        mvc.perform(withPlant(put("/api/v1/custom-field-schemas/material"), plantA).content("""
+                        {"lockVersion":0,"schema":{"schemaVersion":1,"fields":[
+                          {"key":"note","type":"string","title":"备注"},
+                          {"key":"weight","type":"number","title":"重量"}]}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lockVersion").value(1));
+        String id = createMaterial(plantA, "SHARED");
+        mvc.perform(withPlant(put("/api/v1/materials/" + id + "/plant-ext"), plantA).content("""
+                        {"enabled":true,"lockVersion":0,"values":{"note":"abc","weight":12.5}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.values.note").value("abc"))
+                .andExpect(jsonPath("$.values.weight").value(12.5));
+
+        // an existing key's type is immutable, so delete note and add it back as number
+        mvc.perform(withPlant(put("/api/v1/custom-field-schemas/material"), plantA).content("""
+                        {"lockVersion":1,"schema":{"schemaVersion":1,"fields":[
+                          {"key":"weight","type":"number","title":"重量"}]}}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lockVersion").value(2));
+        mvc.perform(withPlant(put("/api/v1/custom-field-schemas/material"), plantA).content("""
+                        {"lockVersion":2,"schema":{"schemaVersion":1,"fields":[
+                          {"key":"note","type":"number","title":"备注"},
+                          {"key":"weight","type":"number","title":"重量"}]}}"""))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/materials/" + id + "/plant-ext").header("X-Plant-Id", plantA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.values.note").doesNotExist())
+                .andExpect(jsonPath("$.values.weight").value(12.5));
+        mvc.perform(get("/api/v1/materials/" + id).header("X-Plant-Id", plantA))
+                .andExpect(jsonPath("$.plantExt.values.note").doesNotExist())
+                .andExpect(jsonPath("$.plantExt.values.weight").value(12.5));
+        assertEquals("abc", jdbc.queryForObject(
+                "SELECT ext_values->>'note' FROM mat_material_plant_ext WHERE material_id = ?::uuid AND plant_id = ?::uuid",
+                String.class, id, plantA));
     }
 
     @Test

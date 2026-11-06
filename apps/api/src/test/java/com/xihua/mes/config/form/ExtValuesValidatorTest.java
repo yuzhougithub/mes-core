@@ -110,4 +110,41 @@ class ExtValuesValidatorTest {
     void valuesMustBeAnObject() {
         assertEquals("EXT_TYPE_MISMATCH", fail("[1]").getErrors().get(0).code());
     }
+
+    @Test
+    void projectOmitsValueWhenRecreatedFieldTypeDoesNotMatchShape() {
+        JsonNode schema = JSON.readTree("""
+                {"schemaVersion":1,"fields":[
+                  {"key":"note","type":"number","title":"备注"},
+                  {"key":"weight","type":"number","title":"重量"},
+                  {"key":"rohs","type":"boolean","title":"RoHS"}
+                ]}
+                """);
+        JsonNode stored = JSON.readTree("{\"note\":\"abc\",\"weight\":12.5,\"rohs\":false,\"legacy\":\"kept\"}");
+        ObjectNode projected = ExtValuesValidator.project(schema, stored);
+        assertThat(projected.has("note")).isFalse();
+        assertEquals(12.5, projected.get("weight").doubleValue());
+        assertEquals(false, projected.get("rohs").booleanValue());
+        assertThat(projected.has("legacy")).isFalse();
+        // stored row is left as-is
+        assertEquals("abc", stored.get("note").stringValue());
+    }
+
+    @Test
+    void projectKeepsSameShapeValuesThatFailTightenedRules() {
+        JsonNode schema = JSON.readTree("""
+                {"schemaVersion":1,"fields":[
+                  {"key":"surface_finish","type":"enum","title":"表面处理",
+                   "options":[{"value":"anodize","label":"阳极氧化"}]},
+                  {"key":"customer_pn","type":"string","title":"客户料号","validation":{"maxLength":2}},
+                  {"key":"due","type":"datetime","title":"到期"}
+                ]}
+                """);
+        ObjectNode projected = ExtValuesValidator.project(schema, JSON.readTree("""
+                {"surface_finish":"chrome","customer_pn":"HX-88021-A","due":"yesterday"}
+                """));
+        assertEquals("chrome", projected.get("surface_finish").stringValue());
+        assertEquals("HX-88021-A", projected.get("customer_pn").stringValue());
+        assertThat(projected.has("due")).isFalse();
+    }
 }
