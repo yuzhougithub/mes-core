@@ -115,7 +115,10 @@ public class PlantContextFilter extends OncePerRequestFilter {
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        String traceId = java.util.UUID.randomUUID().toString().replace("-", "");
+        String traceId = org.slf4j.MDC.get("traceId");
+        if (traceId == null || traceId.isBlank()) {
+            traceId = java.util.UUID.randomUUID().toString().replace("-", "");
+        }
         String body = "{"
                 + "\"type\":\"about:blank\","
                 + "\"title\":\"Bad Request\","

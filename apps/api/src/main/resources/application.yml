@@ -12,8 +12,10 @@ server:
   port: 8080
 
 mybatis-plus:
+  type-handlers-package: com.xihua.mes.common.persistence
   configuration:
     map-underscore-to-camel-case: true
+    jdbc-type-for-null: OTHER
   global-config:
     banner: false
 

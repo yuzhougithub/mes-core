@@ -30,6 +30,34 @@ public final class CurrentContext {
         return PlantContext.require();
     }
 
+    /**
+     * Required plant as UUID (all plant ids are UUIDs, A1).
+     *
+     * @throws com.xihua.mes.common.PlantRequiredException if unset
+     * @throws com.xihua.mes.common.error.ApiException 403 {@code PLANT_FORBIDDEN} if not a UUID
+     */
+    public static java.util.UUID requirePlantUuid() {
+        String raw = requirePlantId();
+        try {
+            return java.util.UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            throw com.xihua.mes.common.error.ApiException.plantForbidden("工厂不存在：" + raw);
+        }
+    }
+
+    /** @return current user id as UUID, or {@code null} if unset / not a UUID (audit columns) */
+    public static java.util.UUID userUuid() {
+        String raw = USER_ID.get();
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return java.util.UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     /** @return current user id, or {@code null} if unset */
     public static String userId() {
         return USER_ID.get();

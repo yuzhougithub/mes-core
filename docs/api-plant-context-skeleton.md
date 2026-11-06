@@ -16,7 +16,8 @@ Branch `feat/api-plant-context-skeleton` (based on `main`), plus follow-up
 - Present-but-blank or multi-value `X-Plant-Id` → HTTP 400 `PLANT_HEADER_INVALID` (`application/problem+json`).
 - Errors from `ApiExceptionHandler`: `ProblemDetail` with `code`, `errors[]`, `traceId`.
 - `PlantContext.set` rejects null/blank; ThreadLocal **does not cross async**.
-- **MyBatis plant line**: placeholder `PlantLineInterceptor` (Javadoc only).
+- **MyBatis plant line**: `common.persistence.PlantLineInnerInterceptor` (V1 slice 1) — shared tables
+  `plant_id IS NULL OR plant_id = :p`, plant-owned / `*_plant_ext` `plant_id = :p`, registry in `PlantScope`.
 - **Dynamic-form stub**: whitelist write-config, RE2J `pattern`, `span` 1–24, unique options,
   non-blank labels, `fields.length` ≤ 50, **`fields: []` allowed**, `schemaVersion` default 1.
   Schema failures → HTTP 422 Problem Details with `errors[{field,code,message}]`.
@@ -31,7 +32,7 @@ Branch `feat/api-plant-context-skeleton` (based on `main`), plus follow-up
 | Error body | RFC 9457 `application/problem+json` |
 | Business context API | `CurrentContext` → `PlantContext` |
 | Schema write | Whitelist; empty `fields` OK; `SCHEMA_*` / `PATTERN_*` |
-| Row filter | `PlantLineInterceptor` placeholder |
+| Row filter | `PlantLineInnerInterceptor` (slice 1) |
 
 ## Test (no Postgres)
 
@@ -42,4 +43,5 @@ cd apps/api
 ./mvnw -B -DskipTests package
 ```
 
-Full `verify` / `HealthEndpointTest` still needs Postgres from `deploy/docker-compose.yml`.
+Since V1 slice 1 the full suite (`./mvnw -B test`) runs on an embedded PostgreSQL 17
+(`io.zonky.test:embedded-postgres`), no Docker needed.
