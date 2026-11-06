@@ -50,11 +50,16 @@ import tools.jackson.databind.JsonNode;
  * Layout rules (A23, architecture «布局 layout»): explicit layout → strict whitelist against <em>this request's</em>
  * steps (422 {@code LAYOUT_INVALID}, never trimmed); omitted → keep stored coordinates but prune orphan keys in the
  * same transaction; explicit {@code null} → clear. Only {@code DRAFT} is writable (409 {@code STATE_CONFLICT}).
+ * <p>
+ * {@code edgeType=MAIN} is canvas-only: those edges are dropped and not stored, and the save still succeeds.
+ * Only {@code REWORK} and {@code RETURN} are persisted. Any other edge type is 422.
  */
 @Service
 public class RoutingService {
 
+    /** Persisted edge types. {@code MAIN} is not in this set; it is dropped before validation. */
     private static final Set<String> EDGE_TYPES = Set.of("REWORK", "RETURN");
+    private static final String EDGE_TYPE_MAIN = "MAIN";
 
     private final RoutingMapper mapper;
     private final RoutingStepMapper stepMapper;
@@ -181,6 +186,9 @@ public class RoutingService {
             idByStepNo.put(s.stepNo(), step.getId());
         }
         for (EdgeInput e : edges) {
+            if (e != null && EDGE_TYPE_MAIN.equals(e.edgeType())) {
+                continue;
+            }
             RoutingEdge edge = new RoutingEdge();
             edge.setId(UUID.randomUUID());
             edge.setRoutingId(routingId);
@@ -253,6 +261,10 @@ public class RoutingService {
                 errors.add(p, ErrorCodes.REQUIRED, "边不能为空");
                 continue;
             }
+            // Main sequence is visual-only on the canvas: ignore it, do not 422, do not store it.
+            if (EDGE_TYPE_MAIN.equals(e.edgeType())) {
+                continue;
+            }
             if (errors.required(p + ".fromStepNo", e.fromStepNo()) != null && !stepNos.contains(e.fromStepNo())) {
                 errors.add(p + ".fromStepNo", ErrorCodes.NOT_FOUND, "起点不在本路线节点中：" + e.fromStepNo());
             }
@@ -263,7 +275,7 @@ public class RoutingService {
                 errors.add(p, ErrorCodes.INVALID_VALUE, "起点与终点不能相同");
             }
             if (errors.required(p + ".edgeType", e.edgeType()) != null && !EDGE_TYPES.contains(e.edgeType())) {
-                errors.add(p + ".edgeType", ErrorCodes.INVALID_VALUE, "edgeType 只能是 REWORK 或 RETURN（MAIN 不落库）");
+                errors.add(p + ".edgeType", ErrorCodes.INVALID_VALUE, "edgeType 只能是 REWORK 或 RETURN");
             }
             if (e.defectCodeId() != null) {
                 Optional<ScopedRef> d = config.findDefectCode(e.defectCodeId());

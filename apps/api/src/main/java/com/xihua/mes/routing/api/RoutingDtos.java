@@ -18,7 +18,10 @@ public final class RoutingDtos {
             BigDecimal stdTimeSec, String remark) {
     }
 
-    /** Edges reference steps by {@code stepNo}; the server maps them to step ids. MAIN edges are not sent. */
+    /**
+     * Edges reference steps by {@code stepNo}; the server maps them to step ids.
+     * {@code MAIN} may be sent and is ignored (not stored). Only {@code REWORK} and {@code RETURN} are persisted.
+     */
     public record EdgeInput(Integer fromStepNo, Integer toStepNo, String edgeType, UUID defectCodeId,
             String remark) {
     }

@@ -1,5 +1,6 @@
 package com.xihua.mes.routing;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -88,8 +90,7 @@ class RoutingLayoutSaveApiTest extends PgIntegrationTest {
 
         // persisted in the same save, not just filtered on read
         JsonNode stored = storedLayout(id);
-        org.assertj.core.api.Assertions.assertThat(stored.get("nodes").propertyNames())
-                .containsExactlyInAnyOrder("10", "20");
+        assertThat(stored.get("nodes").propertyNames()).containsExactlyInAnyOrder("10", "20");
 
         // and re-submitting the (now pruned) layout explicitly is accepted
         mvc.perform(withPlant(put("/api/v1/routings/" + id), plant).content("""
@@ -148,7 +149,7 @@ class RoutingLayoutSaveApiTest extends PgIntegrationTest {
 
         mvc.perform(withPlant(put("/api/v1/routings/" + id), plant).content("""
                         {"name":"n","lockVersion":1,"steps":%s,"edges":[
-                          {"fromStepNo":20,"toStepNo":99,"edgeType":"MAIN"}]}""".formatted(steps(10, 10))))
+                          {"fromStepNo":20,"toStepNo":99,"edgeType":"SHORTCUT"}]}""".formatted(steps(10, 10))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors[*].code", hasItem("DUPLICATE")))
@@ -160,6 +161,38 @@ class RoutingLayoutSaveApiTest extends PgIntegrationTest {
                         {"name":"n","lockVersion":1,"steps":%s,"edges":[]}""".formatted(steps(10))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    }
+
+    @Test
+    void mainEdgesAreDroppedAndUnknownEdgeTypeIsRejected() throws Exception {
+        String id = createRouting().get("id").stringValue();
+        mvc.perform(withPlant(put("/api/v1/routings/" + id), plant).content("""
+                        {"name":"n","lockVersion":0,"steps":%s,"edges":[
+                          {"fromStepNo":10,"toStepNo":20,"edgeType":"MAIN"},
+                          {"fromStepNo":20,"toStepNo":30,"edgeType":"REWORK"}]}""".formatted(steps(10, 20, 30))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.edges.length()").value(1))
+                .andExpect(jsonPath("$.edges[0].edgeType").value("REWORK"))
+                .andExpect(jsonPath("$.edges[0].fromStepNo").value(20))
+                .andExpect(jsonPath("$.edges[0].toStepNo").value(30));
+
+        assertThat(edgeTypes(id)).containsExactly("REWORK");
+
+        mvc.perform(withPlant(put("/api/v1/routings/" + id), plant).content("""
+                        {"name":"n","lockVersion":1,"steps":%s,"edges":[
+                          {"fromStepNo":10,"toStepNo":20,"edgeType":"SHORTCUT"}]}""".formatted(steps(10, 20, 30))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[*].field", hasItem("edges[0].edgeType")))
+                .andExpect(jsonPath("$.errors[*].code", hasItem("INVALID_VALUE")));
+
+        assertThat(edgeTypes(id)).containsExactly("REWORK");
+    }
+
+    private List<String> edgeTypes(String routingId) {
+        return jdbc.queryForList(
+                "SELECT edge_type FROM rtg_routing_edge WHERE routing_id = ? ORDER BY edge_type",
+                String.class, UUID.fromString(routingId));
     }
 
     @Test
