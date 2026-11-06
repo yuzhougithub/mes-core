@@ -31,7 +31,7 @@ import com.xihua.mes.common.PlantHeaderInvalidException;
  * <b>after JWT lands, never trust a client-supplied {@code X-Plant-Id}</b>.
  * <p>
  * Missing {@code X-Plant-Id} does not fail the filter (health / OpenAPI stay reachable);
- * business code uses {@link PlantContext#require()} / {@link CurrentContext#requirePlantId()}.
+ * business code uses {@link CurrentContext#requirePlantId()}.
  * Present-but-blank or multi-value {@code X-Plant-Id} → 400 {@code PLANT_HEADER_INVALID}.
  */
 @Component
@@ -114,9 +114,17 @@ public class PlantContextFilter extends OncePerRequestFilter {
             throws IOException {
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        String body = "{\"code\":\"" + PlantHeaderInvalidException.CODE
-                + "\",\"message\":" + jsonString(message) + "}";
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+        String traceId = java.util.UUID.randomUUID().toString().replace("-", "");
+        String body = "{"
+                + "\"type\":\"about:blank\","
+                + "\"title\":\"Bad Request\","
+                + "\"status\":400,"
+                + "\"detail\":" + jsonString(message) + ","
+                + "\"code\":\"" + PlantHeaderInvalidException.CODE + "\","
+                + "\"errors\":[],"
+                + "\"traceId\":\"" + traceId + "\""
+                + "}";
         response.getWriter().write(body);
         response.flushBuffer();
     }

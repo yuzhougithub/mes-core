@@ -1,17 +1,16 @@
 package com.xihua.mes.auth;
 
-import com.xihua.mes.common.PlantNotSetException;
+import com.xihua.mes.common.PlantRequiredException;
 
 /**
- * Request-scoped current plant id ({@link ThreadLocal}).
+ * Request-scoped current plant id ({@link ThreadLocal}) — low-level storage.
  * <p>
- * Populated by {@link PlantContextFilter} in {@code mes.auth.mode=header} skeleton mode;
- * cleared after the request. Prefer {@link CurrentContext} in business code (PR#5).
+ * <b>Business code should use {@link CurrentContext#requirePlantId()} / {@link CurrentContext#plantId()},
+ * not this class directly.</b> {@link PlantContextFilter} and JWT adapters write here;
+ * {@link CurrentContext} is the stable façade (PR#5).
  * <p>
- * <b>Async:</b> plain {@link ThreadLocal} does <em>not</em> propagate to child threads or
- * reactive/async executors. Callers that hop threads must pass {@code plantId} explicitly
- * or install a Spring {@code TaskDecorator} / wrap the runnable (not implemented in this
- * skeleton).
+ * <b>Async:</b> plain {@link ThreadLocal} does <em>not</em> propagate to child threads.
+ * Pass {@code plantId} explicitly or use a Spring {@code TaskDecorator} (not shipped).
  */
 public final class PlantContext {
 
@@ -41,13 +40,15 @@ public final class PlantContext {
     }
 
     /**
+     * Low-level require. Prefer {@link CurrentContext#requirePlantId()}.
+     *
      * @return non-blank current plant id
-     * @throws PlantNotSetException if unset or blank
+     * @throws PlantRequiredException if unset or blank
      */
     public static String require() {
         String plantId = CURRENT.get();
         if (plantId == null || plantId.isBlank()) {
-            throw new PlantNotSetException(
+            throw new PlantRequiredException(
                     "Plant context is not set; send a non-blank X-Plant-Id request header");
         }
         return plantId;

@@ -1,12 +1,13 @@
 package com.xihua.mes.auth;
 
 /**
- * Thin façade for request-scoped auth context (PR#5).
- * Business code should read plant / user from here, not from headers or tokens directly.
+ * Request-scoped auth context façade (PR#5).
  * <p>
- * Skeleton: delegates plant id to {@link PlantContext}; optional {@code userId} is set from
- * {@code X-User-Id} only when {@code mes.auth.mode=header}. JWT mode will populate the same
- * API from the token without changing callers.
+ * <b>Business entry point:</b> use {@link #requirePlantId()} / {@link #plantId()} / {@link #userId()}.
+ * Do not read request headers or tokens in domain code. Underlying plant storage is
+ * {@link PlantContext} (ThreadLocal); JWT will populate the same façade without changing callers.
+ * <p>
+ * Skeleton: optional {@code userId} from {@code X-User-Id} only when {@code mes.auth.mode=header}.
  */
 public final class CurrentContext {
 
@@ -20,7 +21,11 @@ public final class CurrentContext {
         return PlantContext.get();
     }
 
-    /** @see PlantContext#require() */
+    /**
+     * Required plant for business operations.
+     *
+     * @throws com.xihua.mes.common.PlantRequiredException if unset
+     */
     public static String requirePlantId() {
         return PlantContext.require();
     }

@@ -321,4 +321,15 @@ class DynamicFormSchemaValidatorTest {
                 """);
         assertDoesNotThrow(() -> DynamicFormSchemaValidator.validate(schema, raw));
     }
+
+    @Test
+    void acceptsEmptyFields() throws Exception {
+        DynamicFormSchema schema = new DynamicFormSchema(1, List.of());
+        assertDoesNotThrow(() -> DynamicFormSchemaValidator.validate(schema));
+
+        JsonNode raw = MAPPER.readTree("""
+                {"schemaVersion": 1, "fields": []}
+                """);
+        assertDoesNotThrow(() -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+    }
 }

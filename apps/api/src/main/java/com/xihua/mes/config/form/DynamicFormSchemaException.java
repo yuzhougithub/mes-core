@@ -2,7 +2,7 @@ package com.xihua.mes.config.form;
 
 /**
  * Invalid dynamic-form schema (unknown key, illegal type, pattern, etc.).
- * Carries a stable {@code code} for HTTP 422 bodies.
+ * Carries a stable {@code code} and optional JSON pointer for Problem Details {@code errors}.
  */
 public class DynamicFormSchemaException extends RuntimeException {
 
@@ -15,17 +15,28 @@ public class DynamicFormSchemaException extends RuntimeException {
     public static final String CODE_PATTERN_INVALID = "PATTERN_INVALID";
 
     private final String code;
+    private final String pointer;
 
     public DynamicFormSchemaException(String message) {
-        this(CODE_INVALID, message);
+        this(CODE_INVALID, message, "schema");
     }
 
     public DynamicFormSchemaException(String code, String message) {
+        this(code, message, "schema");
+    }
+
+    public DynamicFormSchemaException(String code, String message, String pointer) {
         super(message);
         this.code = code == null || code.isBlank() ? CODE_INVALID : code;
+        this.pointer = pointer == null || pointer.isBlank() ? "schema" : pointer;
     }
 
     public String getCode() {
         return code;
+    }
+
+    /** JSON-ish path for Problem Details {@code errors[].field}. */
+    public String getPointer() {
+        return pointer;
     }
 }

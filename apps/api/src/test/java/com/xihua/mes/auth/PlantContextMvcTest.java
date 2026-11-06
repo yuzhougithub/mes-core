@@ -1,6 +1,8 @@
 package com.xihua.mes.auth;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -9,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,10 +30,14 @@ class PlantContextMvcTest {
     private MockMvc mockMvc;
 
     @Test
-    void missingPlantHeaderReturns400PlantNotSet() throws Exception {
+    void missingPlantHeaderReturns400PlantRequired() throws Exception {
         mockMvc.perform(get("/__test/plant"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("PLANT_NOT_SET"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("PLANT_REQUIRED"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.traceId").isString());
     }
 
     @Test
@@ -44,6 +51,8 @@ class PlantContextMvcTest {
     void blankPlantHeaderReturns400PlantHeaderInvalid() throws Exception {
         mockMvc.perform(get("/__test/plant").header(PlantContextFilter.HEADER_PLANT_ID, "   "))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("PLANT_HEADER_INVALID"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("PLANT_HEADER_INVALID"))
+                .andExpect(content().string(containsString("PLANT_HEADER_INVALID")));
     }
 }

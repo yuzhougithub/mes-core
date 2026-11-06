@@ -24,7 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.xihua.mes.common.PlantHeaderInvalidException;
-import com.xihua.mes.common.PlantNotSetException;
+import com.xihua.mes.common.PlantRequiredException;
 
 class PlantContextFilterTest {
 
@@ -54,7 +54,7 @@ class PlantContextFilterTest {
         verify(chain).doFilter(request, response);
         assertNull(PlantContext.get());
         assertNull(CurrentContext.userId());
-        assertThrows(PlantNotSetException.class, PlantContext::require);
+        assertThrows(PlantRequiredException.class, PlantContext::require);
     }
 
     @Test

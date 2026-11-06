@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import com.xihua.mes.common.PlantNotSetException;
+import com.xihua.mes.common.PlantRequiredException;
 
 class PlantContextTest {
 
@@ -45,7 +45,7 @@ class PlantContextTest {
 
     @Test
     void requireWhenUnsetThrows() {
-        PlantNotSetException ex = assertThrows(PlantNotSetException.class, PlantContext::require);
+        PlantRequiredException ex = assertThrows(PlantRequiredException.class, PlantContext::require);
         assertTrue(ex.getMessage().contains("X-Plant-Id"));
     }
 
@@ -72,7 +72,7 @@ class PlantContextTest {
                 otherGet.set(PlantContext.get());
                 try {
                     PlantContext.require();
-                } catch (PlantNotSetException e) {
+                } catch (PlantRequiredException e) {
                     otherRequireError.set(e.getMessage());
                 }
                 PlantContext.set("other-plant");

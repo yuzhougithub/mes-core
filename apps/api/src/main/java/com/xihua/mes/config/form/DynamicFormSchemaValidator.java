@@ -49,13 +49,17 @@ public final class DynamicFormSchemaValidator {
                     "Unsupported schemaVersion: " + version + " (only " + SUPPORTED_SCHEMA_VERSION + ")");
         }
         List<FieldDefinition> fields = schema.fields();
-        if (fields == null || fields.isEmpty()) {
-            throw new DynamicFormSchemaException("fields must be a non-empty list");
+        if (fields == null) {
+            throw new DynamicFormSchemaException(
+                    DynamicFormSchemaException.CODE_INVALID,
+                    "fields must be a list",
+                    "fields");
         }
         if (fields.size() > MAX_FIELDS) {
             throw new DynamicFormSchemaException(
                     DynamicFormSchemaException.CODE_TOO_MANY_FIELDS,
-                    "fields.length must be <= " + MAX_FIELDS + " but was " + fields.size());
+                    "fields.length must be <= " + MAX_FIELDS + " but was " + fields.size(),
+                    "fields");
         }
         Set<String> keys = new HashSet<>();
         for (int i = 0; i < fields.size(); i++) {
@@ -119,13 +123,17 @@ public final class DynamicFormSchemaValidator {
         }
 
         JsonNode fieldsNode = root.get("fields");
-        if (fieldsNode == null || fieldsNode.isNull() || !fieldsNode.isArray() || fieldsNode.isEmpty()) {
-            throw new DynamicFormSchemaException("fields must be a non-empty array");
+        if (fieldsNode == null || fieldsNode.isNull() || !fieldsNode.isArray()) {
+            throw new DynamicFormSchemaException(
+                    DynamicFormSchemaException.CODE_INVALID,
+                    "fields must be an array",
+                    "$.fields");
         }
         if (fieldsNode.size() > MAX_FIELDS) {
             throw new DynamicFormSchemaException(
                     DynamicFormSchemaException.CODE_TOO_MANY_FIELDS,
-                    "fields.length must be <= " + MAX_FIELDS + " but was " + fieldsNode.size());
+                    "fields.length must be <= " + MAX_FIELDS + " but was " + fieldsNode.size(),
+                    "$.fields");
         }
 
         Set<String> keys = new HashSet<>();
@@ -302,14 +310,16 @@ public final class DynamicFormSchemaValidator {
             throw new DynamicFormSchemaException(
                     DynamicFormSchemaException.CODE_PATTERN_TOO_LONG,
                     path + " length must be <= " + MAX_PATTERN_CODE_POINTS
-                            + " code points but was " + codePoints);
+                            + " code points but was " + codePoints,
+                    path);
         }
         try {
             Pattern.compile(pattern);
         } catch (PatternSyntaxException ex) {
             throw new DynamicFormSchemaException(
                     DynamicFormSchemaException.CODE_PATTERN_INVALID,
-                    path + " is not a valid RE2 pattern: " + ex.getDescription());
+                    path + " is not a valid RE2 pattern: " + ex.getDescription(),
+                    path);
         }
     }
 
@@ -320,7 +330,8 @@ public final class DynamicFormSchemaValidator {
             if (!allowed.contains(name)) {
                 throw new DynamicFormSchemaException(
                         DynamicFormSchemaException.CODE_UNKNOWN_KEY,
-                        "Unknown key '" + name + "' at " + path);
+                        "Unknown key '" + name + "' at " + path,
+                        path + "." + name);
             }
         }
     }
