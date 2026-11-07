@@ -167,7 +167,7 @@
 | --- | --- | --- |
 | 节点类型 `OPERATION` | `rtg_routing_step`，`is_rework = false` | 主路线工序节点；属性含 `stepNo`、`operationId`、可选 `workCenterId`（仅厂专用路线）、`stdTimeSec`、`remark` |
 | 节点类型 `REWORK_OPERATION` | `rtg_routing_step`，`is_rework = true` | 返工专用节点，不在主路线排序里 |
-| 边类型 `MAIN`（可选、仅视觉） | **不持久化** | 主序相邻节点；保存时丢弃，加载时按 `step_no` 升序重画 |
+| 边类型 `MAIN`（可选、仅视觉） | **不持久化** | 主序相邻节点；请求里出现时服务端**忽略**（不入库、不报错，整体仍 200）；加载时按 `step_no` 升序重画 |
 | 边类型 `REWORK` | `rtg_routing_edge.edge_type = REWORK` | 可带 `defectCodeId` |
 | 边类型 `RETURN` | `rtg_routing_edge.edge_type = RETURN` | 返工回主路线 |
 
@@ -178,7 +178,7 @@
 **保存（画布 → 领域，写 `PUT /routings/{id}`）**
 
 1. 收集所有 `OPERATION` / `REWORK_OPERATION` 节点 → `steps[]`（`stepNo`、`operationId`、`isRework`、…）。**全路线**（含返工节点）`stepNo` 唯一且 > 0，与 `uk_rtg_routing_step_no` 一致；建议主路线用 10、20、30，返工用另一号段（如 110、120）。
-2. 只把 `REWORK` / `RETURN` 边写入 `edges[]`（`fromStepNo`、`toStepNo`、`edgeType`、`defectCodeId`）。忽略或剥离 `MAIN` 边。
+2. 只把 `REWORK` / `RETURN` 边写入 `edges[]`（`fromStepNo`、`toStepNo`、`edgeType`、`defectCodeId`）。请求中的 `MAIN` 边**静默忽略**（剥离后继续保存，HTTP 200，**不**返回 422）。其它未知 `edgeType` → 422 `VALIDATION_FAILED`。
 3. 可选：把各节点画布坐标写入 `layout`（见下），与业务字段同请求提交。仅 `DRAFT` 可写；发布后 `layout_json` **冻结**（与步骤/边一并只读）。
 4. 业务校验与发布规则与现有一致（至少一个主路线节点；每个返工节点至少一条入 `REWORK`、一条出 `RETURN`；`REWORK` 回主路线时只能指向 `step_no` ≤ 起点的节点；工序未停用；跨厂规则等）。画布不另设业务校验通道；`layout` 仅做白名单与体积校验。
 
