@@ -11,13 +11,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import com.xihua.mes.common.PlantNotSetException;
+import com.xihua.mes.common.PlantRequiredException;
 
 class PlantContextTest {
 
     @AfterEach
     void tearDown() {
-        PlantContext.clear();
+        CurrentContext.clear();
     }
 
     @Test
@@ -25,26 +25,38 @@ class PlantContextTest {
         assertNull(PlantContext.get());
         PlantContext.set("plant-a");
         assertEquals("plant-a", PlantContext.get());
+        assertEquals("plant-a", CurrentContext.plantId());
         PlantContext.clear();
         assertNull(PlantContext.get());
+    }
+
+    @Test
+    void setRejectsNullAndBlank() {
+        assertThrows(IllegalArgumentException.class, () -> PlantContext.set(null));
+        assertThrows(IllegalArgumentException.class, () -> PlantContext.set("   "));
     }
 
     @Test
     void requireWhenSet() {
         PlantContext.set("plant-b");
         assertEquals("plant-b", PlantContext.require());
+        assertEquals("plant-b", CurrentContext.requirePlantId());
     }
 
     @Test
     void requireWhenUnsetThrows() {
-        PlantNotSetException ex = assertThrows(PlantNotSetException.class, PlantContext::require);
+        PlantRequiredException ex = assertThrows(PlantRequiredException.class, PlantContext::require);
         assertTrue(ex.getMessage().contains("X-Plant-Id"));
     }
 
     @Test
-    void requireWhenBlankThrows() {
-        PlantContext.set("   ");
-        assertThrows(PlantNotSetException.class, PlantContext::require);
+    void currentContextUserId() {
+        assertNull(CurrentContext.userId());
+        CurrentContext.setUserId("user-1");
+        assertEquals("user-1", CurrentContext.userId());
+        CurrentContext.clear();
+        assertNull(CurrentContext.userId());
+        assertNull(CurrentContext.plantId());
     }
 
     @Test
@@ -60,7 +72,7 @@ class PlantContextTest {
                 otherGet.set(PlantContext.get());
                 try {
                     PlantContext.require();
-                } catch (PlantNotSetException e) {
+                } catch (PlantRequiredException e) {
                     otherRequireError.set(e.getMessage());
                 }
                 PlantContext.set("other-plant");

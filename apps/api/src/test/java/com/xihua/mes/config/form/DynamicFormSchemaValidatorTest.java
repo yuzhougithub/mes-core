@@ -1,10 +1,14 @@
 package com.xihua.mes.config.form;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +38,7 @@ class DynamicFormSchemaValidatorTest {
                                 "备注",
                                 false,
                                 null,
-                                null,
+                                Map.of("pattern", "^[A-Za-z0-9_-]+$"),
                                 null)));
 
         assertDoesNotThrow(() -> DynamicFormSchemaValidator.validate(schema));
@@ -79,7 +83,7 @@ class DynamicFormSchemaValidatorTest {
     }
 
     @Test
-    void rejectsForbiddenWidgetKeyInJson() throws Exception {
+    void rejectsUnknownKeyInWriteConfig() throws Exception {
         JsonNode raw = MAPPER.readTree("""
                 {
                   "schemaVersion": 1,
@@ -96,7 +100,8 @@ class DynamicFormSchemaValidatorTest {
 
         DynamicFormSchemaException ex = assertThrows(
                 DynamicFormSchemaException.class,
-                () -> DynamicFormSchemaValidator.validateJson(raw));
+                () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertEquals(DynamicFormSchemaException.CODE_UNKNOWN_KEY, ex.getCode());
         assertTrue(ex.getMessage().contains("widget"));
     }
 
@@ -119,11 +124,12 @@ class DynamicFormSchemaValidatorTest {
         DynamicFormSchemaException ex = assertThrows(
                 DynamicFormSchemaException.class,
                 () -> DynamicFormSchemaValidator.validateJson(raw));
+        assertEquals(DynamicFormSchemaException.CODE_UNKNOWN_KEY, ex.getCode());
         assertTrue(ex.getMessage().contains("x-component"));
     }
 
     @Test
-    void rejectsNestedForbiddenKeys() throws Exception {
+    void rejectsNestedUnknownLayoutKey() throws Exception {
         JsonNode raw = MAPPER.readTree("""
                 {
                   "schemaVersion": 1,
@@ -140,8 +146,169 @@ class DynamicFormSchemaValidatorTest {
 
         DynamicFormSchemaException ex = assertThrows(
                 DynamicFormSchemaException.class,
-                () -> DynamicFormSchemaValidator.validateJson(raw));
+                () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertEquals(DynamicFormSchemaException.CODE_UNKNOWN_KEY, ex.getCode());
         assertTrue(ex.getMessage().contains("x-reactions"));
+    }
+
+    @Test
+    void rejectsPatternTooLong() throws Exception {
+        String pattern = "a".repeat(201);
+        JsonNode raw = MAPPER.readTree("""
+                {
+                  "schemaVersion": 1,
+                  "fields": [
+                    {
+                      "key": "x",
+                      "type": "string",
+                      "title": "X",
+                      "validation": { "pattern": "%s" }
+                    }
+                  ]
+                }
+                """.formatted(pattern));
+
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertEquals(DynamicFormSchemaException.CODE_PATTERN_TOO_LONG, ex.getCode());
+    }
+
+    @Test
+    void rejectsInvalidPattern() throws Exception {
+        JsonNode raw = MAPPER.readTree("""
+                {
+                  "schemaVersion": 1,
+                  "fields": [
+                    {
+                      "key": "x",
+                      "type": "string",
+                      "title": "X",
+                      "validation": { "pattern": "(?<=abc)def" }
+                    }
+                  ]
+                }
+                """);
+
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertEquals(DynamicFormSchemaException.CODE_PATTERN_INVALID, ex.getCode());
+    }
+
+    @Test
+    void rejectsSpanOutOfRange() throws Exception {
+        JsonNode raw = MAPPER.readTree("""
+                {
+                  "schemaVersion": 1,
+                  "fields": [
+                    {
+                      "key": "x",
+                      "type": "string",
+                      "title": "X",
+                      "layout": { "span": 25 }
+                    }
+                  ]
+                }
+                """);
+
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertTrue(ex.getMessage().contains("span"));
+    }
+
+    @Test
+    void rejectsDuplicateOptionValueAndBlankLabel() throws Exception {
+        JsonNode dup = MAPPER.readTree("""
+                {
+                  "schemaVersion": 1,
+                  "fields": [
+                    {
+                      "key": "color",
+                      "type": "enum",
+                      "title": "颜色",
+                      "options": [
+                        { "value": "r", "label": "红" },
+                        { "value": "r", "label": "赤" }
+                      ]
+                    }
+                  ]
+                }
+                """);
+        DynamicFormSchemaException dupEx = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateWriteConfig(dup));
+        assertTrue(dupEx.getMessage().contains("unique"));
+
+        JsonNode blankLabel = MAPPER.readTree("""
+                {
+                  "schemaVersion": 1,
+                  "fields": [
+                    {
+                      "key": "color",
+                      "type": "enum",
+                      "title": "颜色",
+                      "options": [ { "value": "r", "label": "  " } ]
+                    }
+                  ]
+                }
+                """);
+        DynamicFormSchemaException labelEx = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateWriteConfig(blankLabel));
+        assertTrue(labelEx.getMessage().contains("label"));
+    }
+
+    @Test
+    void rejectsTooManyFields() {
+        List<FieldDefinition> fields = new ArrayList<>();
+        for (int i = 0; i < 51; i++) {
+            fields.add(new FieldDefinition("k" + i, FieldType.STRING, "T" + i, null, null, null, null));
+        }
+        DynamicFormSchema schema = new DynamicFormSchema(1, fields);
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validate(schema));
+        assertEquals(DynamicFormSchemaException.CODE_TOO_MANY_FIELDS, ex.getCode());
+    }
+
+    @Test
+    void rejectsUnsupportedSchemaVersion() throws Exception {
+        JsonNode raw = MAPPER.readTree("""
+                {"schemaVersion": 2, "fields": [{"key":"x","type":"string","title":"X"}]}
+                """);
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertEquals(DynamicFormSchemaException.CODE_UNSUPPORTED_VERSION, ex.getCode());
+    }
+
+    @Test
+    void defaultsMissingSchemaVersionToOne() throws Exception {
+        JsonNode raw = MAPPER.readTree("""
+                {"fields": [{"key":"x","type":"string","title":"X"}]}
+                """);
+        assertDoesNotThrow(() -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+    }
+
+    @Test
+    void unknownTypeIsSchemaInvalidTypeNotBareIae() {
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class,
+                () -> FieldType.from("widget"));
+        assertEquals(DynamicFormSchemaException.CODE_INVALID_TYPE, ex.getCode());
+    }
+
+    @Test
+    void validateWriteConfigAcceptsMap() {
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("schemaVersion", 1);
+        root.put("fields", List.of(Map.of(
+                "key", "ok",
+                "type", "boolean",
+                "title", "OK")));
+        assertDoesNotThrow(() -> DynamicFormSchemaValidator.validateWriteConfig(root));
     }
 
     @Test
@@ -153,5 +320,57 @@ class DynamicFormSchemaValidatorTest {
                 {"schemaVersion":1,"fields":[{"key":"ok","type":"boolean","title":"OK"}]}
                 """);
         assertDoesNotThrow(() -> DynamicFormSchemaValidator.validate(schema, raw));
+    }
+
+    @Test
+    void acceptsEmptyFields() throws Exception {
+        DynamicFormSchema schema = new DynamicFormSchema(1, List.of());
+        assertDoesNotThrow(() -> DynamicFormSchemaValidator.validate(schema));
+
+        JsonNode raw = MAPPER.readTree("""
+                {"schemaVersion": 1, "fields": []}
+                """);
+        assertDoesNotThrow(() -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+    }
+
+    @Test
+    void unknownKeyErrorUsesJsonPointer() throws Exception {
+        JsonNode raw = MAPPER.readTree("""
+                {"schemaVersion":1,"fields":[{"key":"x","type":"string","title":"X","widget":"Input"}]}
+                """);
+        DynamicFormSchemaException ex = assertThrows(
+                DynamicFormSchemaException.class, () -> DynamicFormSchemaValidator.validateWriteConfig(raw));
+        assertEquals("/fields/0/widget", ex.getPointer());
+        assertEquals("SCHEMA_UNKNOWN_KEY", DynamicFormSchemaException.topLevelCode(ex.getCode()));
+    }
+
+    @Test
+    void rejectsBadKeyLongTitleAndOptionsOnNonEnum() throws Exception {
+        for (String field : List.of(
+                "{\"key\":\"Bad-Key\",\"type\":\"string\",\"title\":\"X\"}",
+                "{\"key\":\"x\",\"type\":\"string\",\"title\":\"" + "长".repeat(65) + "\"}",
+                "{\"key\":\"x\",\"type\":\"string\",\"title\":\"X\",\"options\":[{\"value\":\"a\",\"label\":\"A\"}]}",
+                "{\"key\":\"x\",\"type\":\"number\",\"title\":\"X\",\"validation\":{\"pattern\":\"a\"}}",
+                "{\"key\":\"x\",\"type\":\"string\",\"title\":\"X\",\"validation\":{\"minLength\":5,\"maxLength\":2}}")) {
+            JsonNode raw = MAPPER.readTree("{\"schemaVersion\":1,\"fields\":[" + field + "]}");
+            DynamicFormSchemaException ex = assertThrows(DynamicFormSchemaException.class,
+                    () -> DynamicFormSchemaValidator.validateWriteConfig(raw), field);
+            assertEquals("VALIDATION_FAILED", DynamicFormSchemaException.topLevelCode(ex.getCode()), field);
+            assertTrue(ex.getPointer().startsWith("/fields/0"), ex.getPointer());
+        }
+    }
+
+    @Test
+    void existingKeyCannotChangeType() throws Exception {
+        JsonNode stored = MAPPER.readTree("""
+                {"schemaVersion":1,"fields":[{"key":"x","type":"string","title":"X"}]}
+                """);
+        JsonNode next = MAPPER.readTree("""
+                {"schemaVersion":1,"fields":[{"key":"y","type":"number","title":"Y"},
+                                            {"key":"x","type":"number","title":"X"}]}
+                """);
+        DynamicFormSchemaException ex = assertThrows(DynamicFormSchemaException.class,
+                () -> DynamicFormSchemaValidator.validateAgainstStored(next, stored));
+        assertEquals("/fields/1/type", ex.getPointer());
     }
 }

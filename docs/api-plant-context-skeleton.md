@@ -1,24 +1,53 @@
 # API skeleton: plant context + dynamic-form metadata
 
-Branch `feat/api-plant-context-skeleton` (based on `main`).
+Branch `feat/api-plant-context-skeleton` (based on `main`), plus follow-up
+`feat/api-plant-context-followup` (PR#4 review + PR#5 alignment).
 
 ## What landed
 
-- **Plant context**: `PlantContext` (ThreadLocal `String` plantId) + `PlantContextFilter` reading header **`X-Plant-Id`**. Missing header does not fail the filter; business code uses `PlantContext.require()` → `PlantNotSetException` → HTTP 400 `{code,message}` via `ApiExceptionHandler`.
-- **Dynamic-form stub** (`config.form`): closed `FieldType` (8 types), DTO records, `DynamicFormSchemaValidator` (unique keys, enum/multi_enum options, reject Formily/Designable keys). No persistence / controller.
-- Module packages remain stubs; no domain DDL; no JWT / Formily.
+- **Business context API**: prefer **`CurrentContext.requirePlantId()`** / `plantId()` / `userId()`.
+  `PlantContext` remains the ThreadLocal store written by the filter (and later JWT).
+- **Auth mode** (`mes.auth.mode`, default `jwt`):
+  - `header` — read `X-Plant-Id` / `X-User-Id`. Enabled only by `application-dev.yml` and test
+    config (`application-test.yml` + profile `test`). If mode is `header` and the active
+    profiles are not all `dev`/`test` (including no profile, `staging`, `prod`), startup fails
+    (`AuthModeGuard`, A2).
+  - `jwt` (default) — **do not trust** a client-supplied `X-Plant-Id`. JWT is not implemented
+    yet, so this fails closed: the filter leaves plant context empty and
+    `CurrentContext.requirePlantId()` returns HTTP 400 **`PLANT_REQUIRED`**. A forged header
+    is ignored, not accepted.
+- Missing `X-Plant-Id` in header mode does not fail the filter; business uses `CurrentContext.requirePlantId()`
+  → `PlantRequiredException` → HTTP 400 **`PLANT_REQUIRED`** (RFC 9457 Problem Details).
+- Present-but-blank or multi-value `X-Plant-Id` → HTTP 400 `PLANT_HEADER_INVALID` (`application/problem+json`).
+- Errors from `ApiExceptionHandler`: `ProblemDetail` with `code`, `errors[]`, `traceId`.
+- `PlantContext.set` rejects null/blank; ThreadLocal **does not cross async**.
+- **MyBatis plant line**: `common.persistence.PlantLineInnerInterceptor` (V1 slice 1) — shared tables
+  `plant_id IS NULL OR plant_id = :p`, plant-owned / `*_plant_ext` `plant_id = :p`, registry in `PlantScope`.
+- **Dynamic-form stub**: whitelist write-config, RE2J `pattern`, `span` 1–24, unique options,
+  non-blank labels, `fields.length` ≤ 50, **`fields: []` allowed**, `schemaVersion` default 1.
+  Schema failures → HTTP 422 Problem Details with `errors[{field,code,message}]`.
 
-## Waiting on
+## Follow-up vs original skeleton
 
-Architect master-data + custom-field DDL/API before the next vertical slice.
+| Topic | Convention |
+| --- | --- |
+| Header trust | Only `mes.auth.mode=header`, and only with profile `dev` or `test` |
+| Default mode | `jwt` (fail closed until a token adapter exists) |
+| Missing plant | 400 `PLANT_REQUIRED` (not `PLANT_NOT_SET`) |
+| Invalid header | 400 `PLANT_HEADER_INVALID` |
+| Error body | RFC 9457 `application/problem+json` |
+| Business context API | `CurrentContext` → `PlantContext` |
+| Schema write | Whitelist; empty `fields` OK; `SCHEMA_*` / `PATTERN_*` |
+| Row filter | `PlantLineInnerInterceptor` (slice 1) |
 
 ## Test (no Postgres)
 
 ```bash
 source /home/box/.mes-java.env
 cd apps/api
-./mvnw -B -Dtest=PlantContextTest,PlantContextFilterTest,DynamicFormSchemaValidatorTest test
+./mvnw -B -Dtest=PlantContextTest,PlantContextFilterTest,DynamicFormSchemaValidatorTest,PlantContextMvcTest test
 ./mvnw -B -DskipTests package
 ```
 
-Full `verify` / `HealthEndpointTest` still needs Postgres from `deploy/docker-compose.yml`.
+Since V1 slice 1 the full suite (`./mvnw -B test`) runs on an embedded PostgreSQL 17
+(`io.zonky.test:embedded-postgres`), no Docker needed.
