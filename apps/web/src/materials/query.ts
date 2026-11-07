@@ -6,9 +6,13 @@ export type MaterialListQuery = {
   sort: string
 }
 
+export function pageSummary(total: number, selected: number): string {
+  return `共 ${total} 条记录，已选 ${selected} 项`
+}
+
 export const DEFAULT_MATERIAL_QUERY: MaterialListQuery = {
   page: 1,
-  size: 20,
+  size: 10,
   q: '',
   status: '',
   sort: 'code,asc',

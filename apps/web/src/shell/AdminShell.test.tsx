@@ -73,7 +73,7 @@ describe('admin shell and material list', () => {
     expect(screen.getByRole('tab', { name: '物料管理' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: '工作台' })).toBeTruthy()
     expect(screen.getByText('物料管理 / 物料主数据')).toBeTruthy()
-    expect(screen.getByText('共 1 条')).toBeTruthy()
+    expect(screen.getByText('共 1 条记录，已选 0 项')).toBeTruthy()
     expect(screen.getByText('件（PCS）')).toBeTruthy()
     expect((screen.getByTestId('btn-import') as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByTestId('btn-export') as HTMLButtonElement).disabled).toBe(true)

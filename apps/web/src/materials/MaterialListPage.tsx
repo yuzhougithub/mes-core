@@ -19,7 +19,7 @@ import { usePlant } from '../plant/PlantProvider.tsx'
 import { setMaterialsEnabled } from './batch-enabled.ts'
 import { MATERIAL_STATUSES, plantStoppedMeta, statusMeta } from './constants.ts'
 import { MaterialDrawer, type DrawerMode } from './MaterialDrawer.tsx'
-import { DEFAULT_MATERIAL_QUERY, materialSort, toMaterialParams, type MaterialListQuery } from './query.ts'
+import { DEFAULT_MATERIAL_QUERY, materialSort, pageSummary, toMaterialParams, type MaterialListQuery } from './query.ts'
 
 function columnSortOrder(field: string, sort: string): 'ascend' | 'descend' | undefined {
   const [name, direction] = sort.split(',')
@@ -308,9 +308,10 @@ function MaterialList() {
               </span>
             </Tooltip>
           </Form.Item>
-          <Form.Item>
+          <Form.Item className="mes-filter-actions">
             <Space>
               <Button
+                type="primary"
                 icon={<SearchOutlined />}
                 onClick={() => {
                   setApplied((prev) => ({ ...prev, page: 1, q: draft.q, status: draft.status }))
@@ -387,7 +388,7 @@ function MaterialList() {
         ) : null}
         <Table<Material>
           rowKey="id"
-          size="middle"
+          size="small"
           loading={loading}
           columns={columns}
           dataSource={rows}
@@ -401,8 +402,8 @@ function MaterialList() {
             pageSize: applied.size,
             total,
             showSizeChanger: true,
-            pageSizeOptions: [20, 50, 100, 200],
-            showTotal: (count) => `共 ${count} 条`,
+            pageSizeOptions: [10, 20, 50, 100],
+            showTotal: (count) => pageSummary(count, selected.length),
           }}
           locale={{ emptyText: loading ? '正在加载' : '当前工厂暂无物料' }}
           onChange={(pagination, _filters, sorter) => {

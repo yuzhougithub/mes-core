@@ -10,6 +10,7 @@ import {
   GoldOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  DownOutlined,
   ProfileOutlined,
   QuestionCircleOutlined,
   SafetyCertificateOutlined,
@@ -140,6 +141,13 @@ export function AdminShell() {
       </header>
       <div className="mes-body">
         <aside className={collapsed ? 'mes-sider is-collapsed' : 'mes-sider'}>
+          {collapsed ? null : (
+            <div className="mes-menu-group">
+              <span className="mes-menu-group-icon">{MENU_ICONS[module.items[0]?.key ?? '']}</span>
+              <span>{module.label}</span>
+              <DownOutlined />
+            </div>
+          )}
           <Menu
             mode="inline"
             inlineCollapsed={collapsed}

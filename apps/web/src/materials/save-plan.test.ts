@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { extPayload, planMaterialSave } from './save-plan.ts'
-import { materialSort, toMaterialParams } from './query.ts'
+import { materialSort, pageSummary, toMaterialParams } from './query.ts'
 import type { FieldDef } from '../schema/types.ts'
 
 const rohs: FieldDef = { key: 'rohs', type: 'boolean', title: 'RoHS', required: true }
@@ -31,6 +31,12 @@ describe('toMaterialParams', () => {
 
   it('omits a blank keyword', () => {
     expect(toMaterialParams({ page: 1, size: 20, q: '  ', status: '', sort: 'code,asc' }).q).toBeUndefined()
+  })
+})
+
+describe('pageSummary', () => {
+  it('formats the pager summary with the selection count', () => {
+    expect(pageSummary(1248, 2)).toBe('共 1248 条记录，已选 2 项')
   })
 })
 
