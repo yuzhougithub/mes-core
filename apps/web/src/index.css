@@ -1,4 +1,420 @@
 body {
   margin: 0;
+  background: #f2f6fa;
+  color: rgba(0, 0, 0, 0.88);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
+}
+
+.mes-shell {
+  min-height: 100vh;
+  background: #f2f6fa;
+}
+
+.mes-topbar {
+  height: 64px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 0 12px;
+  background: #fff;
+  border-bottom: 1px solid #eef1f6;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.mes-brand {
+  flex: 0 1 260px;
+  min-width: 148px;
+  max-width: 280px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mes-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: block;
+  flex: none;
+  object-fit: contain;
+}
+
+.mes-brand-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mes-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mes-brand-sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mes-module-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mes-module-tabs .ant-tabs-tab {
+  padding: 18px 12px 16px;
+  color: #5c6b7a;
+}
+
+.mes-module-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #1677ff !important;
+  font-weight: 500;
+}
+
+.mes-module-tabs .ant-tabs-nav {
+  margin: 0;
+}
+
+.mes-module-tabs .ant-tabs-nav::before {
+  border-bottom: none;
+}
+
+.mes-module-tabs .ant-tabs-content-holder {
+  display: none;
+}
+
+.mes-plant-select {
+  flex: 0 0 196px;
+  width: 196px;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding-left: 10px;
+  background: #fff;
+  border: 1px solid #e5e8ef;
+  border-radius: 16px;
+}
+
+.mes-plant-icon {
+  color: #1677ff;
+  font-size: 16px;
+  flex: none;
+}
+
+.mes-plant-select .ant-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.mes-plant-select .ant-select-selector {
+  padding-inline: 6px !important;
+}
+
+.mes-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mes-tools .ant-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  color: #5c6b7a;
+}
+
+.mes-body {
+  display: flex;
+  min-height: calc(100vh - 64px);
+}
+
+.mes-sider {
+  width: 208px;
+  flex: none;
+  background: #fff;
+  border-right: 1px solid #eef1f6;
+  display: flex;
+  flex-direction: column;
+}
+
+.mes-sider.is-collapsed {
+  width: 64px;
+}
+
+.mes-menu-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin: 8px 8px 0;
+  padding: 0 8px;
+  color: rgba(0, 0, 0, 0.88);
+  font-size: 14px;
+}
+
+.mes-menu-group .anticon:last-child {
+  margin-left: auto;
+  color: #8c98a8;
+  font-size: 12px;
+}
+
+.mes-sider .ant-menu {
+  border-inline-end: none !important;
+  flex: 1;
+  padding-top: 4px;
+  background: transparent;
+}
+
+.mes-sider .ant-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin-block: 4px;
+  border-radius: 8px;
+}
+
+.mes-sider .ant-menu-item-selected {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.mes-sider-foot {
+  border-top: 1px solid #f0f0f0;
+  padding: 4px;
+}
+
+.mes-content {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 16px 16px;
+  background: #f2f6fa;
+  font-weight: 400;
+}
+
+.mes-breadcrumb {
+  margin-bottom: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.mes-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.mes-subtitle {
+  margin: 4px 0 16px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.mes-content .ant-card,
+.ant-drawer .ant-card {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.mes-filter-card {
+  margin-bottom: 16px;
+}
+
+.mes-filter-form.ant-form-inline {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.mes-filter-form.ant-form-inline .ant-form-item {
+  margin-inline-end: 0;
+  margin-bottom: 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.mes-filter-form .ant-form-item-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.mes-filter-form .ant-form-item-label {
+  padding: 0 0 6px;
+  text-align: start;
+}
+
+.mes-filter-form .ant-form-item-control {
+  width: 100%;
+}
+
+.mes-filter-actions {
+  margin-left: auto !important;
+  flex-direction: row !important;
+  align-items: flex-end !important;
+}
+
+.mes-table-card .ant-table-pagination {
+  margin: 12px 0 0 !important;
+  display: flex;
+  width: 100%;
+  align-items: center;
+}
+
+.mes-table-card .ant-pagination-total-text {
+  margin-right: auto !important;
+  color: #5c6b7a;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.mes-table-card .ant-table-small .ant-table-thead > tr > th,
+.mes-table-card .ant-table-small .ant-table-tbody > tr > td {
+  padding: 5px 12px !important;
+  font-size: 14px;
+}
+
+.mes-content .ant-form-item-label > label,
+.ant-drawer .ant-form-item-label > label,
+.mes-group-title,
+.mes-selected-count {
+  font-weight: 400 !important;
+}
+
+.mes-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mes-selected-count {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.mes-soon {
+  display: inline-block;
+  cursor: not-allowed;
+}
+
+.mes-table-card .ant-table {
+  font-size: 14px;
+}
+
+.mes-table-card .ant-table-thead > tr > th,
+.mes-table-card .ant-table-thead > tr > th.ant-table-column-sort,
+.mes-table-card .ant-table-thead > tr > th .ant-table-column-title,
+.mes-table-card .ant-table-thead > tr > th .ant-table-column-sorters {
+  background: #fafafa !important;
+  font-weight: 400 !important;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.mes-table-card .ant-table-tbody > tr > td {
+  font-weight: 400;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.mes-table-card .ant-table-tbody > tr > td.ant-table-column-sort {
+  background: transparent !important;
+}
+
+.mes-table-card .ant-table-tbody > tr:hover > td,
+.mes-table-card .ant-table-tbody > tr:hover > td.ant-table-column-sort {
+  background: #f7f9fc !important;
+}
+
+.mes-status-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mes-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.mes-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mes-status-tag.is-draft {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.mes-status-tag.is-released {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.mes-status-tag.is-stopped {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.mes-status-tag.is-obsolete {
   background: #f5f5f5;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.mes-row-actions {
+  white-space: nowrap;
+}
+
+.mes-row-actions .ant-btn-link {
+  color: #1677ff;
+  font-weight: 400;
+}
+
+.mes-row-actions .ant-btn-link.ant-btn-dangerous {
+  color: #ff4d4f;
+}
+
+.mes-group-title {
+  margin: 8px 0 12px;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.mes-placeholder {
+  margin: 0 0 16px;
+  font-weight: 400;
+}
+
+.mes-soon-input {
+  background: rgba(0, 0, 0, 0.04);
+  cursor: not-allowed;
 }

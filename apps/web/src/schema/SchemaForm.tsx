@@ -9,25 +9,32 @@ import {
   Row,
   Select,
   Switch,
+  Tooltip,
   Typography,
   Upload,
+  type FormInstance,
   type UploadFile,
   type UploadProps,
 } from 'antd'
-import type { Rule } from 'antd/es/form'
 import dayjs, { type Dayjs } from 'dayjs'
-import type {
-  FieldDef,
-  FieldValidation,
-  FormSchema,
-  SchemaValues,
-} from './types.ts'
+import { buildRules } from './rules.ts'
+import type { FieldDef, FormSchema, SchemaValues } from './types.ts'
+
+export type SchemaFileMode = 'unsupported' | 'mock'
 
 export type SchemaFormProps = {
   schema: FormSchema
   initialValues?: SchemaValues
   onFinish?: (values: SchemaValues) => void
-  submitText?: string
+  /** `null` hides the built-in submit button so a parent drawer can submit. */
+  submitText?: string | null
+  form?: FormInstance
+  disabled?: boolean
+  /**
+   * `unsupported` (default) does not invent storage keys.
+   * `mock` keeps the skeleton demo upload and must not be used against the API.
+   */
+  fileMode?: SchemaFileMode
 }
 
 type FieldGroup = {
@@ -45,7 +52,6 @@ function fieldSortKey(field: FieldDef, index: number): number {
   return field.layout?.order ?? index
 }
 
-/** Group fields: same group together; group order = min order in group. */
 function groupFields(fields: FieldDef[]): FieldGroup[] {
   const indexed = fields.map((field, index) => ({ field, index }))
   indexed.sort((a, b) => fieldSortKey(a.field, a.index) - fieldSortKey(b.field, b.index))
@@ -67,94 +73,7 @@ function groupFields(fields: FieldDef[]): FieldGroup[] {
     }
   }
 
-  return order
-    .map((key) => groups.get(key)!)
-    .sort((a, b) => a.order - b.order)
-}
-
-function buildRules(field: FieldDef): Rule[] {
-  const rules: Rule[] = []
-  if (field.required) {
-    rules.push({
-      required: true,
-      message: `请填写${field.title}`,
-    })
-  }
-
-  const v: FieldValidation | undefined = field.validation
-  if (!v) return rules
-
-  if (field.type === 'string') {
-    if (v.minLength != null) {
-      rules.push({
-        min: v.minLength,
-        message: `${field.title}至少 ${v.minLength} 个字符`,
-      })
-    }
-    if (v.maxLength != null) {
-      rules.push({
-        max: v.maxLength,
-        message: `${field.title}最多 ${v.maxLength} 个字符`,
-      })
-    }
-    if (v.pattern) {
-      if (v.pattern.length > 200) {
-        console.warn(
-          `[SchemaForm] skip pattern for field "${field.key}": length ${v.pattern.length} > 200`,
-          v.pattern,
-        )
-      } else {
-        try {
-          rules.push({
-            pattern: new RegExp(v.pattern),
-            message: `${field.title}格式不正确`,
-          })
-        } catch (err) {
-          console.warn(
-            `[SchemaForm] skip invalid pattern for field "${field.key}":`,
-            v.pattern,
-            err,
-          )
-        }
-      }
-    }
-  }
-
-  if (field.type === 'number') {
-    if (v.min != null) {
-      rules.push({
-        type: 'number',
-        min: v.min,
-        message: `${field.title}不能小于 ${v.min}`,
-      })
-    }
-    if (v.max != null) {
-      rules.push({
-        type: 'number',
-        max: v.max,
-        message: `${field.title}不能大于 ${v.max}`,
-      })
-    }
-  }
-
-  if (field.type === 'multi_enum') {
-    if (v.minItems != null) {
-      rules.push({
-        type: 'array',
-        min: v.minItems,
-        message: `${field.title}至少选择 ${v.minItems} 项`,
-      })
-    }
-    if (v.maxItems != null) {
-      rules.push({
-        type: 'array',
-        max: v.maxItems,
-        message: `${field.title}最多选择 ${v.maxItems} 项`,
-      })
-    }
-  }
-
-  return rules
+  return order.map((key) => groups.get(key)!).sort((a, b) => a.order - b.order)
 }
 
 function mockStorageKey(file: File, kind: 'image' | 'file'): string {
@@ -162,33 +81,39 @@ function mockStorageKey(file: File, kind: 'image' | 'file'): string {
   return `mock/${kind}/${Date.now()}-${safeName}`
 }
 
+type InjectedControlProps = {
+  id?: string
+  value?: unknown
+  checked?: boolean
+  onChange?: (value: unknown) => void
+}
+
 function StorageUpload({
   value,
   onChange,
   kind,
+  disabled,
+  id,
 }: {
   value?: string
   onChange?: (key: string | undefined) => void
   kind: 'image' | 'file'
+  disabled?: boolean
+  id?: string
 }) {
   const fileList: UploadFile[] = value
-    ? [
-        {
-          uid: value,
-          name: value.split('/').pop() ?? value,
-          status: 'done',
-        },
-      ]
+    ? [{ uid: value, name: value.split('/').pop() ?? value, status: 'done' }]
     : []
 
   const props: UploadProps = {
+    id,
     maxCount: 1,
     listType: kind === 'image' ? 'picture-card' : 'text',
     accept: kind === 'image' ? 'image/*' : undefined,
     fileList,
+    disabled,
     beforeUpload: (file) => {
-      const key = mockStorageKey(file, kind)
-      onChange?.(key)
+      onChange?.(mockStorageKey(file, kind))
       return false
     },
     onRemove: () => {
@@ -201,54 +126,131 @@ function StorageUpload({
       {fileList.length === 0
         ? kind === 'image'
           ? '上传图片'
-          : <Button type="default">选择文件</Button>
+          : <Button type="default" disabled={disabled}>选择文件</Button>
         : null}
     </Upload>
   )
 }
 
-function FieldControl({ field }: { field: FieldDef }) {
+function UnsupportedFile({
+  value,
+  id,
+  kind,
+}: {
+  value?: string
+  id?: string
+  kind: 'image' | 'file'
+}) {
+  const noun = kind === 'image' ? '图片' : '文件'
+  return (
+    <Tooltip title="即将上线">
+      <span className="mes-soon">
+        <Input
+          id={id}
+          readOnly
+          className="mes-soon-input"
+          value={value ?? ''}
+          placeholder={`${noun}即将上线`}
+        />
+      </span>
+    </Tooltip>
+  )
+}
+
+function FieldControl({
+  field,
+  disabled,
+  fileMode,
+  id,
+  value,
+  checked,
+  onChange,
+}: {
+  field: FieldDef
+  disabled?: boolean
+  fileMode: SchemaFileMode
+} & InjectedControlProps) {
   switch (field.type) {
     case 'string':
-      return <Input allowClear placeholder={`请输入${field.title}`} />
+      return (
+        <Input
+          id={id}
+          allowClear
+          disabled={disabled}
+          value={typeof value === 'string' ? value : ''}
+          onChange={onChange}
+          placeholder={`请输入${field.title}`}
+        />
+      )
     case 'number':
       return (
         <InputNumber
+          id={id}
+          disabled={disabled}
           style={{ width: '100%' }}
+          value={typeof value === 'number' ? value : undefined}
+          onChange={onChange}
           placeholder={`请输入${field.title}`}
         />
       )
     case 'datetime':
       return (
         <DatePicker
+          id={id}
+          disabled={disabled}
           showTime
           style={{ width: '100%' }}
+          value={dayjs.isDayjs(value) ? value : undefined}
+          onChange={onChange}
           placeholder={`请选择${field.title}`}
         />
       )
     case 'enum':
       return (
         <Select
+          id={id}
           allowClear
-          options={field.options}
+          disabled={disabled}
+          virtual={false}
+          options={field.options ?? []}
+          value={typeof value === 'string' ? value : undefined}
+          onChange={onChange}
           placeholder={`请选择${field.title}`}
         />
       )
     case 'multi_enum':
       return (
         <Select
+          id={id}
           mode="multiple"
           allowClear
-          options={field.options}
+          disabled={disabled}
+          virtual={false}
+          options={field.options ?? []}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
           placeholder={`请选择${field.title}`}
         />
       )
     case 'boolean':
-      return <Switch />
+      return <Switch id={id} disabled={disabled} checked={checked} onChange={onChange} />
     case 'image':
-      return <StorageUpload kind="image" />
     case 'file':
-      return <StorageUpload kind="file" />
+      return fileMode === 'mock' ? (
+        <StorageUpload
+          id={id}
+          kind={field.type}
+          disabled={disabled}
+          value={typeof value === 'string' ? value : undefined}
+          onChange={onChange}
+        />
+      ) : (
+        <UnsupportedFile
+          id={id}
+          kind={field.type}
+          value={typeof value === 'string' ? value : undefined}
+        />
+      )
     default: {
       const unknownType = (field as FieldDef & { type: string }).type
       if (import.meta.env.DEV) {
@@ -263,14 +265,18 @@ function FieldControl({ field }: { field: FieldDef }) {
   }
 }
 
-function toFormInitialValues(
+/** Required booleans start at `false` so an untouched Switch counts as filled. */
+export function toFormInitialValues(
   fields: FieldDef[],
   values: SchemaValues | undefined,
 ): Record<string, unknown> {
-  if (!values) return {}
   const next: Record<string, unknown> = {}
   for (const field of fields) {
-    const raw = values[field.key]
+    const raw = values?.[field.key]
+    if (field.type === 'boolean') {
+      next[field.key] = typeof raw === 'boolean' ? raw : false
+      continue
+    }
     if (raw == null) continue
     if (field.type === 'datetime' && typeof raw === 'string') {
       const parsed = dayjs(raw)
@@ -282,17 +288,18 @@ function toFormInitialValues(
   return next
 }
 
-function fromFormValues(
+export function fromFormValues(
   fields: FieldDef[],
   values: Record<string, unknown>,
 ): SchemaValues {
   const next: SchemaValues = {}
   for (const field of fields) {
     const raw = values[field.key]
-    if (raw == null) {
-      next[field.key] = undefined
+    if (field.type === 'boolean') {
+      next[field.key] = raw === true
       continue
     }
+    if (raw == null || raw === '') continue
     if (field.type === 'datetime' && dayjs.isDayjs(raw)) {
       next[field.key] = (raw as Dayjs).toISOString()
       continue
@@ -311,9 +318,13 @@ export function SchemaForm({
   initialValues,
   onFinish,
   submitText = '提交',
+  form,
+  disabled = false,
+  fileMode = 'unsupported',
 }: SchemaFormProps) {
-  const [form] = Form.useForm()
-  const fields = schema.fields
+  const [ownedForm] = Form.useForm()
+  const formInstance = form ?? ownedForm
+  const fields = Array.isArray(schema?.fields) ? schema.fields : []
   const groups = useMemo(() => groupFields(fields), [fields])
   const formInitial = useMemo(
     () => toFormInitialValues(fields, initialValues),
@@ -322,27 +333,22 @@ export function SchemaForm({
 
   return (
     <Form
-      form={form}
+      form={formInstance}
       layout="vertical"
+      disabled={disabled}
       initialValues={formInitial}
+      data-testid="schema-form"
       onFinish={(vals) => {
         onFinish?.(fromFormValues(fields, vals as Record<string, unknown>))
       }}
     >
       {groups.map((group) => (
         <div
-          key={group.name ?? group.fields.map((f) => f.key).join(',')}
-          style={{ marginBottom: 24 }}
+          key={group.name ?? group.fields.map((field) => field.key).join(',')}
+          style={{ marginBottom: 8 }}
         >
           {group.name ? (
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 15,
-                marginBottom: 12,
-                color: 'rgba(0,0,0,0.88)',
-              }}
-            >
+            <div className="mes-group-title">
               {group.name}
             </div>
           ) : null}
@@ -355,18 +361,20 @@ export function SchemaForm({
                   rules={buildRules(field)}
                   valuePropName={field.type === 'boolean' ? 'checked' : 'value'}
                 >
-                  <FieldControl field={field} />
+                  <FieldControl field={field} disabled={disabled} fileMode={fileMode} />
                 </Form.Item>
               </Col>
             ))}
           </Row>
         </div>
       ))}
-      <Form.Item>
-        <Button type="primary" htmlType="submit">
-          {submitText}
-        </Button>
-      </Form.Item>
+      {submitText != null ? (
+        <Form.Item>
+          <Button type="primary" htmlType="submit" disabled={disabled}>
+            {submitText}
+          </Button>
+        </Form.Item>
+      ) : null}
     </Form>
   )
 }
