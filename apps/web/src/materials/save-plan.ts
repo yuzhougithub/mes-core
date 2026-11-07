@@ -100,7 +100,7 @@ export function planMaterialSave(input: {
     const titles = missing.map((field) => field.title).join('、')
     return {
       kind: 'blocked',
-      reason: `无法保存扩展值：${titles} 需要上传文件，而 POST /api/v1/files 未实现。未提交物料。`,
+      reason: `无法保存：${titles}即将上线。未提交物料。`,
     }
   }
   const values = extPayload(input.fields, input.extValues)

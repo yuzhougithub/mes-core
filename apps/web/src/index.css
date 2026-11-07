@@ -1,21 +1,21 @@
 body {
   margin: 0;
-  background: #f5f5f5;
+  background: #f5f7fa;
   color: rgba(0, 0, 0, 0.88);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
 }
 
 .mes-shell {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #f5f7fa;
 }
 
 .mes-topbar {
-  height: 56px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px;
+  padding: 8px 16px;
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
   position: sticky;
@@ -24,8 +24,9 @@ body {
 }
 
 .mes-brand {
-  width: 168px;
-  flex: none;
+  flex: 0 1 260px;
+  min-width: 148px;
+  max-width: 280px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -36,16 +37,36 @@ body {
   height: 32px;
   border-radius: 8px;
   display: block;
+  flex: none;
+  object-fit: contain;
+}
+
+.mes-brand-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .mes-name {
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.2px;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mes-brand-sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mes-module-tabs {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -53,15 +74,44 @@ body {
   margin: 0;
 }
 
+.mes-module-tabs .ant-tabs-nav::before {
+  border-bottom: none;
+}
+
 .mes-module-tabs .ant-tabs-content-holder {
   display: none;
 }
 
+.mes-plant-select {
+  flex: 0 0 210px;
+  width: 210px;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding-left: 8px;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+}
+
+.mes-plant-icon {
+  color: #1677ff;
+  font-size: 16px;
+  flex: none;
+}
+
+.mes-plant-select .ant-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.mes-plant-select .ant-select-selector {
+  padding-inline: 6px !important;
+}
+
 .mes-tools {
-  width: 176px;
   flex: none;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
 }
 
@@ -86,28 +136,19 @@ body {
 .mes-sider .ant-menu {
   border-inline-end: none !important;
   flex: 1;
+  padding-top: 8px;
 }
 
-.mes-plant {
-  padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+.mes-sider .ant-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin-block: 4px;
+  border-radius: 8px;
 }
 
-.mes-plant-collapsed {
-  display: flex;
-  justify-content: center;
-}
-
-.mes-plant-label {
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.mes-plant-note {
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
+.mes-sider .ant-menu-item-selected {
+  background: #e6f4ff;
+  color: #1677ff;
 }
 
 .mes-sider-foot {
@@ -119,12 +160,15 @@ body {
   flex: 1;
   min-width: 0;
   padding: 16px 24px 32px;
+  background: #f5f7fa;
+  font-weight: 400;
 }
 
 .mes-breadcrumb {
   margin-bottom: 8px;
   color: rgba(0, 0, 0, 0.45);
   font-size: 14px;
+  font-weight: 400;
 }
 
 .mes-title {
@@ -137,12 +181,17 @@ body {
 .mes-subtitle {
   margin: 4px 0 16px;
   color: rgba(0, 0, 0, 0.45);
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
 }
 
-.mes-filter-card,
-.mes-table-card {
+.mes-content .ant-card,
+.ant-drawer .ant-card {
+  background: #fff;
+  border: 1px solid #f0f0f0;
   border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .mes-filter-card {
@@ -153,8 +202,11 @@ body {
   row-gap: 12px;
 }
 
-.mes-filter-note {
-  margin: 12px 0 0 !important;
+.mes-content .ant-form-item-label > label,
+.ant-drawer .ant-form-item-label > label,
+.mes-group-title,
+.mes-selected-count {
+  font-weight: 400 !important;
 }
 
 .mes-actions {
@@ -165,12 +217,60 @@ body {
   margin-bottom: 12px;
 }
 
+.mes-selected-count {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.mes-soon {
+  display: inline-block;
+  cursor: not-allowed;
+}
+
+.mes-table-card .ant-table {
+  font-size: 14px;
+}
+
+.mes-table-card .ant-table-thead > tr > th,
+.mes-table-card .ant-table-thead > tr > th.ant-table-column-sort,
+.mes-table-card .ant-table-thead > tr > th .ant-table-column-title,
+.mes-table-card .ant-table-thead > tr > th .ant-table-column-sorters {
+  background: #fafafa !important;
+  font-weight: 400 !important;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.mes-table-card .ant-table-tbody > tr > td {
+  font-weight: 400;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.mes-table-card .ant-table-tbody > tr > td.ant-table-column-sort {
+  background: transparent !important;
+}
+
+.mes-table-card .ant-table-tbody > tr:hover > td,
+.mes-table-card .ant-table-tbody > tr:hover > td.ant-table-column-sort {
+  background: #f5f7fa !important;
+}
+
+.mes-status-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .mes-status-tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
-  margin-inline-end: 0;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
 }
 
 .mes-status-dot {
@@ -180,6 +280,52 @@ body {
   background: currentColor;
 }
 
+.mes-status-tag.is-draft {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.mes-status-tag.is-released {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.mes-status-tag.is-stopped {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.mes-status-tag.is-obsolete {
+  background: #f5f5f5;
+  color: rgba(0, 0, 0, 0.45);
+}
+
 .mes-row-actions {
   white-space: nowrap;
+}
+
+.mes-row-actions .ant-btn-link {
+  color: #1677ff;
+  font-weight: 400;
+}
+
+.mes-row-actions .ant-btn-link.ant-btn-dangerous {
+  color: #ff4d4f;
+}
+
+.mes-group-title {
+  margin: 8px 0 12px;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.mes-placeholder {
+  margin: 0 0 16px;
+  font-weight: 400;
+}
+
+.mes-soon-input {
+  background: rgba(0, 0, 0, 0.04);
+  cursor: not-allowed;
 }

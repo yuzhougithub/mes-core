@@ -1,6 +1,7 @@
 import '@ant-design/v5-patch-for-react-19'
 import { App as AntdApp, ConfigProvider } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
+import { zhCN } from './locale.ts'
+import { BrandProvider } from './brand/BrandProvider.tsx'
 import { PlantProvider } from './plant/PlantProvider.tsx'
 import { AdminShell } from './shell/AdminShell.tsx'
 
@@ -13,14 +14,16 @@ export default function App() {
         token: {
           colorPrimary: '#1677ff',
           borderRadius: 8,
-          colorBgLayout: '#f5f5f5',
+          colorBgLayout: '#f5f7fa',
         },
       }}
     >
       <AntdApp>
-        <PlantProvider>
-          <AdminShell />
-        </PlantProvider>
+        <BrandProvider>
+          <PlantProvider>
+            <AdminShell />
+          </PlantProvider>
+        </BrandProvider>
       </AntdApp>
     </ConfigProvider>
   )

@@ -9,6 +9,7 @@ import {
   Row,
   Select,
   Switch,
+  Tooltip,
   Typography,
   Upload,
   type FormInstance,
@@ -133,29 +134,26 @@ function StorageUpload({
 
 function UnsupportedFile({
   value,
-  onChange,
   id,
   kind,
 }: {
   value?: string
-  onChange?: (key: string | undefined) => void
   id?: string
   kind: 'image' | 'file'
 }) {
   const noun = kind === 'image' ? '图片' : '文件'
   return (
-    <div>
-      <Input
-        id={id}
-        readOnly
-        value={value ?? ''}
-        onChange={(event) => onChange?.(event.target.value || undefined)}
-        placeholder={`无法上传${noun}`}
-      />
-      <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
-        {`POST /api/v1/files 未实现，不能上传新的${noun}。已有存储键会原样保留。`}
-      </Typography.Paragraph>
-    </div>
+    <Tooltip title="即将上线">
+      <span className="mes-soon">
+        <Input
+          id={id}
+          readOnly
+          className="mes-soon-input"
+          value={value ?? ''}
+          placeholder={`${noun}即将上线`}
+        />
+      </span>
+    </Tooltip>
   )
 }
 
@@ -251,7 +249,6 @@ function FieldControl({
           id={id}
           kind={field.type}
           value={typeof value === 'string' ? value : undefined}
-          onChange={onChange}
         />
       )
     default: {
@@ -351,14 +348,7 @@ export function SchemaForm({
           style={{ marginBottom: 8 }}
         >
           {group.name ? (
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 15,
-                marginBottom: 12,
-                color: 'rgba(0,0,0,0.88)',
-              }}
-            >
+            <div className="mes-group-title">
               {group.name}
             </div>
           ) : null}

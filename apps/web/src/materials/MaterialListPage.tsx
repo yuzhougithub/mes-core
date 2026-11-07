@@ -1,4 +1,13 @@
-import { Alert, App, Button, Card, DatePicker, Form, Input, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { Alert, App, Button, Card, DatePicker, Form, Input, Popconfirm, Select, Space, Table, Tooltip } from 'antd'
+import { zhCN } from '../locale.ts'
+import {
+  CheckOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  StopOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import dayjs from 'dayjs'
@@ -8,7 +17,7 @@ import { getPlantEpoch } from '../api/plant-session.ts'
 import type { Material, Uom } from '../api/types.ts'
 import { usePlant } from '../plant/PlantProvider.tsx'
 import { setMaterialsEnabled } from './batch-enabled.ts'
-import { MATERIAL_STATUSES, statusMeta } from './constants.ts'
+import { MATERIAL_STATUSES, plantStoppedMeta, statusMeta } from './constants.ts'
 import { MaterialDrawer, type DrawerMode } from './MaterialDrawer.tsx'
 import { DEFAULT_MATERIAL_QUERY, materialSort, toMaterialParams, type MaterialListQuery } from './query.ts'
 
@@ -24,13 +33,22 @@ function formatTime(value: string | null | undefined): string {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : value
 }
 
-function StatusTag({ status }: { status: string }) {
+function StatusTag({ status, enabled }: { status: string; enabled?: boolean }) {
   const meta = statusMeta(status)
+  const stopped = enabled === undefined ? null : plantStoppedMeta(enabled)
   return (
-    <Tag color={meta.tone} className="mes-status-tag">
-      <span className={`mes-status-dot is-${meta.tone}`} />
-      {meta.label}
-    </Tag>
+    <span className="mes-status-tags">
+      <span className={`mes-status-tag is-${meta.tone}`}>
+        <span className="mes-status-dot" />
+        {meta.label}
+      </span>
+      {stopped ? (
+        <span className={`mes-status-tag is-${stopped.tone}`}>
+          <span className="mes-status-dot" />
+          {stopped.label}
+        </span>
+      ) : null}
+    </span>
   )
 }
 
@@ -48,7 +66,6 @@ function MaterialList() {
   const [selected, setSelected] = useState<string[]>([])
   const [acting, setActing] = useState(false)
   const [uoms, setUoms] = useState<Uom[]>([])
-  const [uomTruncated, setUomTruncated] = useState(false)
   const [drawer, setDrawer] = useState<DrawerState>(null)
 
   useEffect(() => {
@@ -82,7 +99,6 @@ function MaterialList() {
       .then((page) => {
         if (cancelled || getPlantEpoch() !== epoch) return
         setUoms(page.items)
-        setUomTruncated(page.total > page.items.length)
       })
       .catch((err: unknown) => {
         if (cancelled || isStale(err)) return
@@ -95,7 +111,7 @@ function MaterialList() {
 
   function uomLabel(id: string): string {
     const uom = uoms.find((item) => item.id === id)
-    if (!uom) return uomTruncated ? `${id}（单位列表不完整）` : id
+    if (!uom) return id
     return `${uom.name}（${uom.code}）`
   }
 
@@ -173,17 +189,13 @@ function MaterialList() {
       render: (value: string | null | undefined) => value || '—',
     },
     {
-      title: uomTruncated ? '单位（列表不完整）' : '单位',
+      title: '单位',
       dataIndex: 'uomId',
       width: 120,
       render: (value: string) => uomLabel(value),
     },
     {
-      title: (
-        <Tooltip title="分类名称接口 GET /api/v1/material-categories 未实现。有分类时显示分类 ID。">
-          <span>分类</span>
-        </Tooltip>
-      ),
+      title: '分类',
       dataIndex: 'categoryId',
       width: 120,
       render: (value: string | null | undefined) => value || '—',
@@ -213,13 +225,14 @@ function MaterialList() {
           <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
           <Button type="link" size="small" onClick={() => setDrawer({ mode: 'edit', id: row.id })}>编辑</Button>
           {row.status === 'OBSOLETE' ? (
-            <Tooltip title="已作废，本厂扩展只读">
-              <Button type="link" size="small" disabled>停用</Button>
+            <Tooltip title="已作废，不能停用">
+              <span className="mes-soon">
+                <Button type="link" size="small" disabled>停用</Button>
+              </span>
             </Tooltip>
           ) : (
             <Popconfirm
-              title="在当前工厂停用？"
-              description="只改本厂扩展 enabled，不改变草稿、发布或作废。已是停用则不会重复提交。"
+              title="在当前工厂停用该物料？"
               okText="停用"
               cancelText="取消"
               onConfirm={() => disableOne(row)}
@@ -230,7 +243,7 @@ function MaterialList() {
           {row.status === 'DRAFT' ? (
             <Popconfirm
               title="删除该草稿物料？"
-              description="仅草稿可删除，服务端做逻辑删除。"
+              description="仅草稿可以删除。"
               okText="删除"
               okButtonProps={{ danger: true }}
               cancelText="取消"
@@ -239,8 +252,10 @@ function MaterialList() {
               <Button type="link" size="small" danger>删除</Button>
             </Popconfirm>
           ) : (
-            <Tooltip title="只有草稿可删除">
-              <Button type="link" size="small" danger disabled>删除</Button>
+            <Tooltip title="只有草稿可以删除">
+              <span className="mes-soon">
+                <Button type="link" size="small" danger disabled>删除</Button>
+              </span>
             </Tooltip>
           )}
         </Space>
@@ -263,9 +278,9 @@ function MaterialList() {
             />
           </Form.Item>
           <Form.Item label="分类">
-            <Tooltip title="未实现：GET /api/v1/material-categories。列表虽然接受 categoryId，但没有分类目录，不能做下拉，也不会只过滤当前页。">
-              <span data-testid="filter-category">
-                <Select disabled placeholder="分类接口未实现" style={{ width: 180 }} />
+            <Tooltip title="即将上线">
+              <span className="mes-soon" data-testid="filter-category">
+                <Select disabled placeholder="分类" style={{ width: 180 }} />
               </span>
             </Tooltip>
           </Form.Item>
@@ -282,8 +297,8 @@ function MaterialList() {
             />
           </Form.Item>
           <Form.Item label="创建时间">
-            <Tooltip title="未实现：GET /api/v1/materials 没有创建时间范围参数。不会提交日期，也不会只过滤当前页。">
-              <span data-testid="filter-created-range">
+            <Tooltip title="即将上线">
+              <span className="mes-soon" data-testid="filter-created-range">
                 <DatePicker.RangePicker
                   disabled
                   allowEmpty={[true, true]}
@@ -296,7 +311,7 @@ function MaterialList() {
           <Form.Item>
             <Space>
               <Button
-                type="primary"
+                icon={<SearchOutlined />}
                 onClick={() => {
                   setApplied((prev) => ({ ...prev, page: 1, q: draft.q, status: draft.status }))
                   setSelected([])
@@ -316,48 +331,43 @@ function MaterialList() {
             </Space>
           </Form.Item>
         </Form>
-        <Typography.Paragraph type="secondary" className="mes-filter-note">
-          分类与创建时间暂不可筛：对应接口或查询参数未提供，查询不会提交它们，也不会在当前页本地过滤。批量导入与导出未实现，按钮已禁用。
-        </Typography.Paragraph>
       </Card>
 
       <Card className="mes-table-card">
         <div className="mes-actions">
           <Space wrap>
-            <Button type="primary" onClick={() => setDrawer({ mode: 'create' })}>新增</Button>
-            <Tooltip title="未实现：GET /api/v1/io/materials/template 与 POST /api/v1/io/materials/import。不会假装导入成功。">
-              <span>
-                <Button disabled data-testid="btn-import">批量导入</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>新增</Button>
+            <Tooltip title="即将上线">
+              <span className="mes-soon">
+                <Button disabled icon={<UploadOutlined />} data-testid="btn-import">批量导入</Button>
               </span>
             </Tooltip>
-            <Tooltip title="未实现：GET /api/v1/io/materials/export。分页列表不能当作全量导出。">
-              <span>
-                <Button disabled data-testid="btn-export">导出</Button>
+            <Tooltip title="即将上线">
+              <span className="mes-soon">
+                <Button disabled icon={<DownloadOutlined />} data-testid="btn-export">导出</Button>
               </span>
             </Tooltip>
             <Popconfirm
-              title="批量启用所选物料？"
-              description="没有批量接口。将逐条 GET 详情后 PUT /materials/{id}/plant-ext。切换工厂会中止后续请求。已作废的条目会失败并列出。"
+              title="在当前工厂启用所选物料？"
               okText="启用"
               cancelText="取消"
               disabled={selected.length === 0}
               onConfirm={() => runBatch(true)}
             >
-              <Button disabled={selected.length === 0 || acting} data-testid="btn-enable">批量启用</Button>
+              <Button icon={<CheckOutlined />} disabled={selected.length === 0 || acting} data-testid="btn-enable">批量启用</Button>
             </Popconfirm>
             <Popconfirm
-              title="批量停用所选物料？"
-              description="没有批量接口。将逐条写本厂扩展 enabled=false，不改变生命周期状态。已作废的条目会失败并列出。"
+              title="在当前工厂停用所选物料？"
               okText="停用"
               cancelText="取消"
               disabled={selected.length === 0}
               onConfirm={() => runBatch(false)}
             >
-              <Button disabled={selected.length === 0 || acting} data-testid="btn-disable">批量停用</Button>
+              <Button icon={<StopOutlined />} disabled={selected.length === 0 || acting} data-testid="btn-disable">批量停用</Button>
             </Popconfirm>
           </Space>
           <Space>
-            <span>已选 {selected.length} 项</span>
+            <span className="mes-selected-count">已选 {selected.length} 项</span>
             <Button type="link" disabled={selected.length === 0} onClick={() => setSelected([])}>清空</Button>
           </Space>
         </div>
@@ -386,6 +396,7 @@ function MaterialList() {
             onChange: (keys) => setSelected(keys.map(String)),
           }}
           pagination={{
+            locale: zhCN.Pagination,
             current: applied.page,
             pageSize: applied.size,
             total,

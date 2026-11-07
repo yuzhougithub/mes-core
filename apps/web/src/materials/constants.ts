@@ -26,15 +26,21 @@ export function materialTypeLabel(value: string): string {
   return MATERIAL_TYPES.find((item) => item.value === value)?.label ?? value
 }
 
-export function statusMeta(status: string): { label: string; tone: 'processing' | 'success' | 'default' } {
+export function statusMeta(status: string): { label: string; tone: 'draft' | 'released' | 'obsolete' } {
   switch (status) {
     case 'DRAFT':
-      return { label: '草稿', tone: 'processing' }
+      return { label: '草稿', tone: 'draft' }
     case 'RELEASED':
-      return { label: '已发布', tone: 'success' }
+      return { label: '已发布', tone: 'released' }
     case 'OBSOLETE':
-      return { label: '已作废', tone: 'default' }
+      return { label: '已作废', tone: 'obsolete' }
     default:
-      return { label: status, tone: 'default' }
+      return { label: status, tone: 'obsolete' }
   }
+}
+
+/** Plant extension `enabled`. This is not the lifecycle status above. */
+export function plantStoppedMeta(enabled: boolean): { label: string; tone: 'stopped' } | null {
+  if (enabled) return null
+  return { label: '停用', tone: 'stopped' }
 }

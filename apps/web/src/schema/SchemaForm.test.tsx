@@ -113,7 +113,7 @@ describe('SchemaForm', () => {
       fields: [{ key: 'drawing', type: 'file', title: '图纸' }],
     }
     render(<Harness schema={schema} onFinish={onFinish} />)
-    expect(screen.getByText(/POST \/api\/v1\/files 未实现/)).toBeTruthy()
+    expect(screen.getByPlaceholderText('文件即将上线')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '提交' }))
     expect(onFinish).toHaveBeenCalledWith({})
     expect(JSON.stringify(onFinish.mock.calls)).not.toContain('mock/')

@@ -1,4 +1,4 @@
-import { Alert, App, Button, Col, Drawer, Form, Input, Radio, Row, Select, Space, Typography } from 'antd'
+import { Alert, App, Button, Col, Drawer, Form, Input, Radio, Row, Select, Space, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import {
   createMaterial,
@@ -60,7 +60,6 @@ export function MaterialDrawer({
   const [detail, setDetail] = useState<Material | null>(null)
   const [schema, setSchema] = useState<FormSchema>({ schemaVersion: 1, fields: [] })
   const [uoms, setUoms] = useState<Uom[]>([])
-  const [uomTruncated, setUomTruncated] = useState(false)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
@@ -89,7 +88,6 @@ export function MaterialDrawer({
         setDetail(material)
         setSchema(parseFormSchema(schemaView.schema))
         setUoms(items)
-        setUomTruncated(uomPage.total > uomPage.items.length)
         setLoading(false)
       })
       .catch((err: unknown) => {
@@ -174,7 +172,7 @@ export function MaterialDrawer({
           } catch (err) {
             if (isStale(err)) return
             const problem = toApiError(err).problem
-            message.error(`物料已创建，但本厂扩展值保存失败。${problem.detail || problem.title}`)
+            message.error(`物料已创建，但补充信息没有保存。${problem.detail || problem.title}`)
             onPartialCreate(created.id)
             return
           }
@@ -191,7 +189,7 @@ export function MaterialDrawer({
         } catch (err) {
           if (isStale(err)) return
           applyProblem(toApiError(err).problem)
-          message.error('主数据已保存，本厂扩展值保存失败。已重新加载版本。')
+          message.error('物料已保存，扩展信息没有保存成功。请再试一次。')
           setAttempt((value) => value + 1)
           return
         }
@@ -276,7 +274,7 @@ export function MaterialDrawer({
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message="物料已发布，主数据只读，仍可修改本厂扩展值。"
+              message="已发布，基本资料不能修改。"
             />
           ) : null}
           {status === 'OBSOLETE' ? (
@@ -284,7 +282,7 @@ export function MaterialDrawer({
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
-              message="物料已作废，主数据和本厂扩展都只读。"
+              message="已作废，不能修改。"
             />
           ) : null}
           {saveError ? (
@@ -317,7 +315,7 @@ export function MaterialDrawer({
                   name="code"
                   label="编码"
                   rules={[{ required: true, message: '请填写编码' }, { max: 64, message: '编码最多 64 个字符' }]}
-                  extra={mode === 'create' ? '编码规则接口未实现，需要手填。创建后不可改。' : '编码创建后不可改。'}
+                  extra={mode === 'create' ? undefined : '创建后不可改。'}
                 >
                   <Input disabled={mode !== 'create'} maxLength={64} />
                 </Form.Item>
@@ -337,7 +335,6 @@ export function MaterialDrawer({
                   name="materialType"
                   label="物料类型"
                   rules={[{ required: true, message: '请选择物料类型' }]}
-                  extra="字典接口未实现，选项为系统种子。保存仍由服务端校验。"
                 >
                   <Select virtual={false} options={typeOptions} />
                 </Form.Item>
@@ -347,7 +344,6 @@ export function MaterialDrawer({
                   name="uomId"
                   label="单位"
                   rules={[{ required: true, message: '请选择单位' }]}
-                  extra={uomTruncated ? '计量单位超过 200 条，下拉不是全量。' : undefined}
                 >
                   <Select
                     virtual={false}
@@ -362,8 +358,12 @@ export function MaterialDrawer({
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="分类" extra="分类接口未实现。新建不填写；编辑时原样带回，避免被清空。">
-                  <Input disabled value={mode === 'create' ? '不填写' : (detail?.categoryId ?? '无')} />
+                <Form.Item label="分类">
+                  <Tooltip title="即将上线">
+                    <span className="mes-soon">
+                      <Input disabled value={mode === 'create' ? '' : (detail?.categoryId ?? '')} placeholder="分类" />
+                    </span>
+                  </Tooltip>
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -378,16 +378,13 @@ export function MaterialDrawer({
               </Col>
             </Row>
           </Form>
-          <Typography.Title level={5} style={{ marginTop: 8 }}>本厂自定义字段</Typography.Title>
-          {detail?.plantExt ? (
-            <Typography.Paragraph type="secondary">
-              本厂启用：{detail.plantExt.enabled ? '是' : '否'}。启用与停用在列表中操作，保存扩展值时保持当前启用状态。
-            </Typography.Paragraph>
-          ) : (
-            <Typography.Paragraph type="secondary">
-              当前工厂还没有这条物料的扩展行。保存自定义字段时会创建，默认本厂启用。
-            </Typography.Paragraph>
-          )}
+          <div className="mes-group-title">本厂自定义字段</div>
+          {detail?.plantExt && detail.plantExt.enabled === false ? (
+            <span className="mes-status-tag is-stopped">
+              <span className="mes-status-dot" />
+              停用
+            </span>
+          ) : null}
           {fields.length === 0 ? (
             <Typography.Text type="secondary">当前工厂没有物料自定义字段。</Typography.Text>
           ) : (

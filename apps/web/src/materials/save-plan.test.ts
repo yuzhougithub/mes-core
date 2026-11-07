@@ -91,7 +91,7 @@ describe('planMaterialSave', () => {
     })
     expect(plan.kind).toBe('blocked')
     if (plan.kind !== 'blocked') return
-    expect(plan.reason).toContain('POST /api/v1/files')
+    expect(plan.reason).toContain('即将上线')
   })
 
   it('keeps categoryId when updating a draft and skips the header after release', () => {

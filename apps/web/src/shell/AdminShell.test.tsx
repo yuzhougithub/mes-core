@@ -69,7 +69,7 @@ describe('admin shell and material list', () => {
 
     render(<App />)
     expect(await screen.findByText('AAA-CODE')).toBeTruthy()
-    expect(screen.getByText('NordMES')).toBeTruthy()
+    expect(screen.getByText('MES 制造执行系统')).toBeTruthy()
     expect(screen.getByRole('tab', { name: '物料管理' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: '工作台' })).toBeTruthy()
     expect(screen.getByText('物料管理 / 物料主数据')).toBeTruthy()
@@ -83,7 +83,7 @@ describe('admin shell and material list', () => {
     expect(calls.some((call) => call.url.startsWith('/api/v1/materials') && call.plant === PLANT_A)).toBe(true)
 
     await user.type(screen.getByRole('textbox', { name: '关键词' }), '外壳')
-    await user.click(screen.getByRole('button', { name: '查询' }))
+    await user.click(screen.getByRole('button', { name: /查询/ }))
     await waitFor(() => {
       expect(calls.some((call) => call.url.includes('q=') && call.url.includes('page=1') && call.plant === PLANT_A)).toBe(true)
     })
