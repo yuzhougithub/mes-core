@@ -51,4 +51,20 @@ describe('Perm', () => {
     render(<Perm code="sys:menu:create"><button type="button">新增</button></Perm>)
     expect(screen.queryByRole('button', { name: '新增' })).toBeNull()
   })
+
+  it('hides a global write from a factory admin who was issued the code', () => {
+    ready({ permissions: ['sys:menu:create'], roles: ['ADMIN'], superAdmin: false })
+    render(<Perm code="sys:menu:create" global><button type="button">新增</button></Perm>)
+    expect(screen.queryByRole('button', { name: '新增' })).toBeNull()
+  })
+
+  it('shows a global write only when the code is present and the user is a super admin', () => {
+    ready({ permissions: ['sys:menu:create'], roles: [], superAdmin: true })
+    const { unmount } = render(<Perm code="sys:menu:create" global><button type="button">新增</button></Perm>)
+    expect(screen.getByRole('button', { name: '新增' })).toBeTruthy()
+    unmount()
+    ready({ permissions: [], roles: [], superAdmin: true })
+    render(<Perm code="sys:menu:create" global><button type="button">新增</button></Perm>)
+    expect(screen.queryByRole('button', { name: '新增' })).toBeNull()
+  })
 })

@@ -13,6 +13,8 @@ import {
 import { listAllRoles, type Role } from '../api/roles.ts'
 import { maskEmail, maskMobile } from '../auth/mask.ts'
 import { passwordProblems } from '../auth/password.ts'
+import { useAuth } from '../auth/useAuth.ts'
+import { usePerm } from '../perm/usePerm.ts'
 
 export type EditorMode = 'create' | 'edit' | 'detail'
 
@@ -53,15 +55,25 @@ const EMPTY = {
 
 export function UserEditor(props: Props) {
   const { message } = App.useApp()
+  const auth = useAuth()
+  const canGrantPlants = usePerm('sys:user:grant')
   const [form] = Form.useForm<typeof EMPTY>()
   const [loading, setLoading] = useState(props.mode !== 'create')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [bindings, setBindings] = useState<BindingDraft[]>(() => initialBindings(props.mode, props.plants))
+  const [plantBaseline, setPlantBaseline] = useState<PlantBindingInput[]>(() => (
+    normalizeBindings(initialBindings(props.mode, props.plants))
+  ))
   const [roles, setRoles] = useState<Role[]>([])
   const [rolesError, setRolesError] = useState<string | null>(null)
   const title = props.mode === 'create' ? '新增用户' : props.mode === 'edit' ? '编辑用户' : '用户详情'
+
+  function rememberPlants(rows: BindingDraft[]) {
+    setBindings(rows)
+    setPlantBaseline(normalizeBindings(rows))
+  }
 
   useEffect(() => {
     let cancel = false
@@ -96,10 +108,9 @@ export function UserEditor(props: Props) {
           superAdmin: row.superAdmin,
         })
         const visible = new Set(props.plants.map((plant) => plant.id))
-        const rows = row.plants
+        rememberPlants(row.plants
           .filter((plant) => props.superAdmin || visible.has(plant.plantId))
-          .map(toDraft)
-        setBindings(rows)
+          .map(toDraft))
         setLoading(false)
       })
       .catch((err: unknown) => {
@@ -130,7 +141,7 @@ export function UserEditor(props: Props) {
           superAdmin: row.superAdmin,
         })
         const visible = new Set(props.plants.map((plant) => plant.id))
-        setBindings(row.plants.filter((plant) => props.superAdmin || visible.has(plant.plantId)).map(toDraft))
+        rememberPlants(row.plants.filter((plant) => props.superAdmin || visible.has(plant.plantId)).map(toDraft))
         setLoading(false)
       })
       .catch((err: unknown) => {
@@ -191,9 +202,15 @@ export function UserEditor(props: Props) {
         remark: blank(values.remark),
         lockVersion: detail.lockVersion,
       })
-      const replaced = await replaceUserPlants(updated.id, updated.lockVersion, prepared)
+      const plantsEditable = canGrantPlants && detail.id !== auth.me?.user.id
+      if (plantsEditable && !sameBindings(prepared, plantBaseline)) {
+        const replaced = await replaceUserPlants(updated.id, updated.lockVersion, prepared)
+        message.success('已保存')
+        props.onSaved(replaced.id, null)
+        return
+      }
       message.success('已保存')
-      props.onSaved(replaced.id, null)
+      props.onSaved(updated.id, null)
     } catch (err) {
       if (isStale(err) || isAuthRedirect(err)) return
       const api = toApiError(err)
@@ -263,7 +280,13 @@ export function UserEditor(props: Props) {
           ) : null}
           <div className="mes-group-title">工厂任职</div>
           {rolesError ? <div className="mes-form-error">{rolesError}</div> : null}
-          <BindingEditor options={props.plants} roles={roles} value={bindings} onChange={setBindings} />
+          <BindingEditor
+            options={props.plants}
+            roles={roles}
+            value={bindings}
+            readOnly={props.mode === 'edit' && !(canGrantPlants && detail?.id !== auth.me?.user.id)}
+            onChange={setBindings}
+          />
         </Form>
       ) : null}
     </Drawer>
@@ -306,11 +329,13 @@ function BindingEditor({
   options,
   roles,
   value,
+  readOnly = false,
   onChange,
 }: {
   options: PlantChoice[]
   roles: Role[]
   value: BindingDraft[]
+  readOnly?: boolean
   onChange: (next: BindingDraft[]) => void
 }) {
   if (options.length === 0) {
@@ -337,6 +362,7 @@ function BindingEditor({
           <div className="mes-binding-row" key={option.id}>
             <Checkbox
               checked={Boolean(row)}
+              disabled={readOnly}
               onChange={(event) => {
                 if (event.target.checked) {
                   update([...value, { plantId: option.id, isDefault: value.length === 0, active: true, jobTitle: '', roleIds: [] }])
@@ -349,7 +375,7 @@ function BindingEditor({
             </Checkbox>
             <Radio
               checked={defaultId === option.id}
-              disabled={!row}
+              disabled={readOnly || !row}
               onChange={() => {
                 onChange(value.map((item) => ({ ...item, isDefault: item.plantId === option.id, active: item.plantId === option.id ? true : item.active })))
               }}
@@ -358,7 +384,7 @@ function BindingEditor({
             </Radio>
             <Checkbox
               checked={row?.active ?? false}
-              disabled={!row}
+              disabled={readOnly || !row}
               onChange={(event) => {
                 update(value.map((item) => (
                   item.plantId === option.id ? { ...item, active: event.target.checked } : item
@@ -370,7 +396,7 @@ function BindingEditor({
             <Input
               aria-label={`${option.name}岗位`}
               placeholder="岗位"
-              disabled={!row}
+              disabled={readOnly || !row}
               value={row?.jobTitle ?? ''}
               onChange={(event) => {
                 const jobTitle = event.target.value
@@ -383,7 +409,7 @@ function BindingEditor({
               allowClear
               virtual={false}
               placeholder="角色"
-              disabled={!row}
+              disabled={readOnly || !row}
               style={{ minWidth: 220 }}
               value={row?.roleIds ?? []}
               options={roleOptions(roles, row?.roleIds ?? [])}
@@ -430,6 +456,22 @@ function normalizeBindings(rows: BindingDraft[]): PlantBindingInput[] {
     jobTitle: row.jobTitle.trim() || null,
     roleIds: row.roleIds,
   }))
+}
+
+function sameBindings(left: PlantBindingInput[], right: PlantBindingInput[]): boolean {
+  return bindingKey(left) === bindingKey(right)
+}
+
+function bindingKey(rows: PlantBindingInput[]): string {
+  const normalized = rows.map((row) => ({
+    plantId: row.plantId,
+    isDefault: row.isDefault,
+    active: row.active,
+    jobTitle: row.jobTitle ?? null,
+    roleIds: [...row.roleIds].sort(),
+  }))
+  normalized.sort((a, b) => a.plantId.localeCompare(b.plantId))
+  return JSON.stringify(normalized)
 }
 
 function roleOptions(roles: Role[], selected: string[]) {

@@ -166,7 +166,7 @@ export function MenuPage() {
         return (
           <Space size={0} className="mes-row-actions">
             {node.type === 'BUTTON' ? null : (
-              <Perm code="sys:menu:create">
+              <Perm code="sys:menu:create" global>
                 <Button
                   type="link"
                   size="small"
@@ -177,7 +177,7 @@ export function MenuPage() {
                 </Button>
               </Perm>
             )}
-            <Perm code="sys:menu:update">
+            <Perm code="sys:menu:update" global>
               <Button
                 type="link"
                 size="small"
@@ -187,11 +187,11 @@ export function MenuPage() {
                 编辑
               </Button>
             </Perm>
-            <Perm code="sys:menu:update">
+            <Perm code="sys:menu:update" global>
               <Button type="link" size="small" disabled={acting} onClick={() => setMoving(node)}>移动</Button>
             </Perm>
             {node.enabled ? (
-              <Perm code="sys:menu:update">
+              <Perm code="sys:menu:update" global>
                 <Popconfirm
                   title="停用该菜单？"
                   okText="停用"
@@ -207,7 +207,7 @@ export function MenuPage() {
                 </Popconfirm>
               </Perm>
             ) : (
-              <Perm code="sys:menu:update">
+              <Perm code="sys:menu:update" global>
                 <Button
                   type="link"
                   size="small"
@@ -223,7 +223,7 @@ export function MenuPage() {
                 </Button>
               </Perm>
             )}
-            <Perm code="sys:menu:delete">
+            <Perm code="sys:menu:delete" global>
               <Popconfirm
                 title="删除该菜单？"
                 okText="删除"
@@ -270,7 +270,7 @@ export function MenuPage() {
       <Card className="mes-table-card">
         <div className="mes-actions">
           <Space wrap>
-            <Perm code="sys:menu:create">
+            <Perm code="sys:menu:create" global>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditor({ mode: 'create', parentId: null })}>
                 新增
               </Button>

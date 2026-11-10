@@ -184,16 +184,16 @@ export function RolePage() {
       fixed: 'right',
       render: (_value, row) => (
         <Space size={0} className="mes-row-actions">
-          <Perm code="sys:role:grant">
+          <Perm code="sys:role:grant" global>
             <Button type="link" size="small" disabled={acting} onClick={() => setGrantRole(row)}>授权</Button>
           </Perm>
-          <Perm code="sys:role:update">
+          <Perm code="sys:role:update" global>
             <Button type="link" size="small" disabled={acting} onClick={() => setEditor({ mode: 'edit', role: row })}>
               编辑
             </Button>
           </Perm>
           {row.enabled ? (
-            <Perm code="sys:role:update">
+            <Perm code="sys:role:update" global>
               <Popconfirm
                 title="停用该角色？"
                 okText="停用"
@@ -209,7 +209,7 @@ export function RolePage() {
               </Popconfirm>
             </Perm>
           ) : (
-            <Perm code="sys:role:update">
+            <Perm code="sys:role:update" global>
               <Button
                 type="link"
                 size="small"
@@ -225,7 +225,7 @@ export function RolePage() {
               </Button>
             </Perm>
           )}
-          <Perm code="sys:role:delete">
+          <Perm code="sys:role:delete" global>
             <Popconfirm
               title="删除该角色？"
               okText="删除"
@@ -284,7 +284,7 @@ export function RolePage() {
       <Card className="mes-table-card">
         <div className="mes-actions">
           <Space wrap>
-            <Perm code="sys:role:create">
+            <Perm code="sys:role:create" global>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditor({ mode: 'create' })}>新增</Button>
             </Perm>
             <Tooltip title="即将上线">
@@ -577,13 +577,13 @@ function GrantDrawer({
       destroyOnHidden
       onClose={onClose}
       extra={tab === 'grant' ? (
-        <Perm code="sys:role:grant">
+        <Perm code="sys:role:grant" global>
           <Button type="primary" loading={saving} disabled={loading || error !== null} onClick={() => { void saveGrant() }}>
             保存
           </Button>
         </Perm>
       ) : (
-        <Perm code="sys:role:update">
+        <Perm code="sys:role:update" global>
           <Button type="primary" loading={saving} onClick={() => { void saveScope() }}>保存</Button>
         </Perm>
       )}
