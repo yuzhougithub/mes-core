@@ -1,24 +1,22 @@
 import { Button, Form, Input } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiRequest } from '../api/http.ts'
 import { formatProblem, toApiError, type ApiError } from '../api/problem.ts'
 import { useBrand } from '../brand/useBrand.ts'
 import { passwordProblems } from './password.ts'
-import { finishPasswordChange, getPendingUsername, logout } from './store.ts'
-import { useAuth } from './useAuth.ts'
-
-function useAuthUsername(): string {
-  const auth = useAuth()
-  return auth.me?.user.username || getPendingUsername()
-}
+import { finishPasswordChange, loadAccountName, logout } from './store.ts'
 
 export function ChangePasswordForm({ onDone }: { onDone?: () => void }) {
-  const username = useAuthUsername()
   const [form] = Form.useForm<{ oldPassword: string; newPassword: string; confirm: string }>()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    void loadAccountName()
+  }, [])
+
   async function onFinish(values: { oldPassword: string; newPassword: string; confirm: string }) {
+    const username = await loadAccountName()
     const problems = passwordProblems(values.newPassword, username)
     if (values.newPassword !== values.confirm) problems.push('两次输入的新密码不一致')
     if (values.newPassword === values.oldPassword) problems.push('新密码不能与当前密码相同')

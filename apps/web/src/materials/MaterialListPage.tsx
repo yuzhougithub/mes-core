@@ -225,7 +225,8 @@ function MaterialList() {
     {
       title: '操作',
       key: 'actions',
-      width: 210,
+      width: 240,
+      fixed: 'right',
       render: (_value, row) => (
         <Space size={0} className="mes-row-actions">
           <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
@@ -398,6 +399,7 @@ function MaterialList() {
           loading={loading}
           columns={columns}
           dataSource={rows}
+          scroll={{ x: 1400 }}
           rowSelection={{
             selectedRowKeys: selected,
             onChange: (keys) => setSelected(keys.map(String)),

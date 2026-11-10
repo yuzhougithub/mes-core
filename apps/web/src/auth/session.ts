@@ -91,23 +91,23 @@ async function refreshOnce(): Promise<TokenResponse | null> {
       headers: csrfHeaders(),
     })
   } catch {
-    emitLost()
+    endSession()
     return null
   }
   if (!response.ok) {
-    emitLost()
+    endSession()
     return null
   }
   let body: unknown = null
   try {
     body = await response.json()
   } catch {
-    emitLost()
+    endSession()
     return null
   }
   const token = parseToken(body)
   if (!token) {
-    emitLost()
+    endSession()
     return null
   }
   accessToken = token.accessToken
@@ -115,7 +115,7 @@ async function refreshOnce(): Promise<TokenResponse | null> {
   return token
 }
 
-function emitLost(): void {
+export function endSession(): void {
   accessToken = null
   for (const listener of lostListeners) listener()
 }

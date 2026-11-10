@@ -39,9 +39,9 @@ export function isStale(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'AbortError'
 }
 
-/** 401 and forced password change move the shell; list pages should not toast them. */
+/** Forced password change replaces the shell. A 401 is shown, not dropped. */
 export function isAuthRedirect(err: unknown): boolean {
-  return err instanceof ApiError && (err.problem.status === 401 || err.problem.code === 'PASSWORD_CHANGE_REQUIRED')
+  return err instanceof ApiError && err.problem.code === 'PASSWORD_CHANGE_REQUIRED'
 }
 
 export function toApiError(err: unknown): ApiError {

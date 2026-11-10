@@ -136,8 +136,10 @@ export function UserEditor(props: Props) {
       message.error('默认工厂必须是有效任职')
       return
     }
-    if (props.mode === 'create' && values.password) {
-      const problems = passwordProblems(values.password, values.username || values.code)
+    const password = (values.password ?? '').trim()
+    if (props.mode === 'create' && password) {
+      const account = (values.username.trim() || values.code.trim()).toLowerCase()
+      const problems = passwordProblems(password, account)
       if (problems.length) {
         form.setFields([{ name: 'password', errors: problems }])
         return
@@ -148,7 +150,7 @@ export function UserEditor(props: Props) {
       if (props.mode === 'create') {
         const created = await createUser({
           username: values.username.trim() || undefined,
-          password: values.password.trim() || undefined,
+          password: password || undefined,
           code: values.code.trim(),
           name: values.name.trim(),
           mobile: blank(values.mobile),

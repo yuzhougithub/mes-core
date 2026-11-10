@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import dayjs from 'dayjs'
 import { listPlants } from '../api/resources.ts'
 import { formatProblem, isAuthRedirect, isStale, toApiError, type ApiError } from '../api/problem.ts'
-import { getPlantEpoch, getPlantSnapshot, subscribePlantSession } from '../api/plant-session.ts'
+import { getPlantEpoch, getPlantId, getPlantSnapshot, subscribePlantSession } from '../api/plant-session.ts'
 import {
   contactKnown,
   deleteUser,
@@ -55,7 +55,7 @@ function formatTime(value: string | null | undefined): string {
 
 type DrawerState = { mode: EditorMode; id?: string } | null
 
-export function UserListPage({
+function UserList({
   extraPlants = NO_EXTRA,
   recoverWhenSelfAssigned = false,
 }: {
@@ -171,17 +171,17 @@ export function UserListPage({
   }
 
   function reset(row: UserSummary) {
-    const typed = superAdmin ? (passwordDraft.current.get(row.id) ?? '').trim() : ''
+    const password = superAdmin ? (passwordDraft.current.get(row.id) ?? '').trim() : ''
     passwordDraft.current.delete(row.id)
-    if (typed) {
-      const problems = passwordProblems(typed, row.username)
+    if (password) {
+      const problems = passwordProblems(password, row.username)
       if (problems.length) {
         message.error(problems.join('；'))
         return
       }
     }
     void run(async () => {
-      const result = await resetUserPassword(row.id, row.lockVersion, typed || undefined)
+      const result = await resetUserPassword(row.id, row.lockVersion, password || undefined)
       if (result.password) setSecret(result.password)
       else message.success('已重置密码')
     })
@@ -248,7 +248,8 @@ export function UserListPage({
     {
       title: '操作',
       key: 'actions',
-      width: 280,
+      width: 320,
+      fixed: 'right',
       render: (_value, row) => (
         <Space size={0} className="mes-row-actions">
           <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
@@ -395,7 +396,7 @@ export function UserListPage({
           loading={loading}
           columns={columns}
           dataSource={rows}
-          scroll={{ x: 1180 }}
+          scroll={{ x: 1400 }}
           pagination={{
             locale: zhCN.Pagination,
             current: applied.page,
@@ -434,6 +435,14 @@ export function UserListPage({
       <OneTimeSecret password={secret} onClose={() => setSecret(null)} />
     </>
   )
+}
+
+export function UserListPage(props: {
+  extraPlants?: PlantChoice[]
+  recoverWhenSelfAssigned?: boolean
+}) {
+  const plantId = useSyncExternalStore(subscribePlantSession, getPlantId, getPlantId)
+  return <UserList key={plantId ?? ''} {...props} />
 }
 
 async function attachContacts(rows: UserSummary[], epoch: number): Promise<UserSummary[]> {

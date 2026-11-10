@@ -1,4 +1,4 @@
-import { emitPasswordChangeRequired, getAccessToken, refreshAccess } from '../auth/session.ts'
+import { emitPasswordChangeRequired, endSession, getAccessToken, refreshAccess } from '../auth/session.ts'
 import {
   ApiError,
   StalePlantResponse,
@@ -120,20 +120,24 @@ async function requestOnce<T>(path: string, options: RequestOptions, allowRefres
   }
   if (!response.ok) {
     const problem = parseProblem(response.status, parsed, response.headers.get('X-Trace-Id'))
-    if (allowRefresh && options.auth !== false && isExpired(problem)) {
+    if (allowRefresh && shouldRefresh(problem, options.auth)) {
       const refreshed = await refreshAccess()
       if (plantChanged(epochAtStart, pinned, usePlant)) throw new StalePlantResponse()
       if (!refreshed) throw new ApiError(problem)
       return requestOnce<T>(path, options, false)
     }
+    if (!allowRefresh && options.auth !== false && problem.status === 401) endSession()
     if (problem.code === 'PASSWORD_CHANGE_REQUIRED') emitPasswordChangeRequired()
     throw new ApiError(problem)
   }
   return parsed as T
 }
 
-function isExpired(problem: ProblemDetails): boolean {
-  return problem.status === 401 && problem.code === 'TOKEN_EXPIRED'
+function shouldRefresh(problem: ProblemDetails, auth: boolean | undefined): boolean {
+  if (auth === false || problem.status !== 401) return false
+  return problem.code === 'TOKEN_EXPIRED'
+    || problem.code === 'TOKEN_INVALID'
+    || problem.code === 'UNAUTHENTICATED'
 }
 
 function isJsonBody(response: Response): boolean {

@@ -107,6 +107,117 @@ describe('forced password change', () => {
     expect(screen.getByText('管理员')).toBeTruthy()
   })
 
+  it('returns to the login page when the access token is invalid', async () => {
+    seedAuthSession({
+      phase: 'ready',
+      token: 'old-token',
+      notice: null,
+      me: {
+        user: {
+          id: '00000000-0000-4000-8000-0000000000c1',
+          username: 'admin',
+          status: 'ACTIVE',
+          superAdmin: true,
+          mustChangePassword: false,
+          permVersion: 1,
+        },
+        person: { id: '00000000-0000-4000-8000-0000000000c2', code: 'A001', name: '管理员' },
+        plant: { id: PLANT, code: 'P1', name: '一厂' },
+        plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
+        roles: ['ADMIN'],
+        permissions: [],
+        menus: [],
+      },
+    })
+    let refreshes = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/v1/auth/refresh') {
+        refreshes += 1
+        return Response.json({
+          title: '登录凭证无效',
+          status: 401,
+          detail: '登录凭证无效',
+          code: 'TOKEN_INVALID',
+          errors: [],
+        }, { status: 401 })
+      }
+      if (url.startsWith('/api/v1/materials') || url.startsWith('/api/v1/uoms')) {
+        return Response.json({
+          title: '登录凭证无效',
+          status: 401,
+          detail: '登录凭证无效',
+          code: 'TOKEN_INVALID',
+          errors: [],
+        }, { status: 401 })
+      }
+      return Response.json({ title: 'missing', status: 404, detail: url, code: 'NOT_FOUND', errors: [] }, { status: 404 })
+    }))
+
+    render(<App />)
+    expect(await screen.findByRole('button', { name: '登录' })).toBeTruthy()
+    expect(refreshes).toBeGreaterThan(0)
+    expect(screen.queryByText('物料主数据')).toBeNull()
+  })
+
+  it('uses the username from /auth/me when checking a new password', async () => {
+    const user = userEvent.setup()
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push(`${init?.method ?? 'GET'} ${url}`)
+      if (url === '/api/v1/auth/refresh') {
+        return Response.json({
+          title: '未登录',
+          status: 401,
+          detail: '未登录',
+          code: 'UNAUTHENTICATED',
+          errors: [],
+        }, { status: 401 })
+      }
+      if (url === '/api/v1/auth/login' && init?.method === 'POST') {
+        return Response.json({
+          accessToken: 'access-1',
+          expiresIn: 1800,
+          mustChangePassword: true,
+          plant: null,
+          roles: [],
+        })
+      }
+      if (url === '/api/v1/auth/me') {
+        return Response.json({
+          user: {
+            id: '00000000-0000-4000-8000-0000000000c1',
+            username: 'zhang',
+            status: 'ACTIVE',
+            superAdmin: false,
+            mustChangePassword: true,
+            permVersion: 1,
+          },
+          person: { id: '00000000-0000-4000-8000-0000000000c2', code: 'Z001', name: '张三' },
+          plant: { id: PLANT, code: 'P1', name: '一厂' },
+          plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
+          roles: [],
+          permissions: [],
+          menus: [],
+        })
+      }
+      return Response.json({ title: 'missing', status: 404, detail: url, code: 'NOT_FOUND', errors: [] }, { status: 404 })
+    }))
+
+    render(<App />)
+    await user.type(await screen.findByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'OldPassw0rd!')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+    await user.type(await screen.findByLabelText('当前密码'), 'OldPassw0rd!')
+    await user.type(screen.getByLabelText('新密码'), 'Zhang-aa1!')
+    await user.type(screen.getByLabelText('确认新密码'), 'Zhang-aa1!')
+    await user.click(screen.getByRole('button', { name: '更新密码' }))
+    expect(await screen.findByText('密码不能包含用户名')).toBeTruthy()
+    expect(calls.some((call) => call.includes('/api/v1/auth/me'))).toBe(true)
+    expect(calls.some((call) => call.includes('/api/v1/auth/change-password'))).toBe(false)
+  })
+
   it('returns to the login page when a refresh fails', async () => {
     seedAuthSession({
       phase: 'ready',

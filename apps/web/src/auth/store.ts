@@ -30,12 +30,6 @@ let snapshot: AuthSnapshot = {
   notice: null,
 }
 
-let pendingUsername = ''
-
-export function getPendingUsername(): string {
-  return pendingUsername
-}
-
 function emit(): void {
   for (const listener of listeners) listener()
 }
@@ -137,8 +131,28 @@ export async function restoreSession(isCancelled: () => boolean): Promise<void> 
   }
 }
 
+let accountNameLoad: Promise<string> | null = null
+
+/** Username for the forced-password check. `/auth/me` is the source. */
+export function loadAccountName(): Promise<string> {
+  const known = snapshot.me?.user.username
+  if (known) return Promise.resolve(known)
+  if (!getAccessToken()) return Promise.resolve('')
+  if (!accountNameLoad) {
+    accountNameLoad = fetchMe()
+      .then((me) => {
+        if (getAuthSnapshot().phase === 'must-change') publish({ ...getAuthSnapshot(), me })
+        return me.user.username ?? ''
+      })
+      .catch(() => getAuthSnapshot().me?.user.username ?? '')
+      .finally(() => {
+        accountNameLoad = null
+      })
+  }
+  return accountNameLoad
+}
+
 export async function login(username: string, password: string): Promise<void> {
-  pendingUsername = username.trim().toLowerCase()
   let response: Response
   try {
     response = await fetch('/api/v1/auth/login', {
