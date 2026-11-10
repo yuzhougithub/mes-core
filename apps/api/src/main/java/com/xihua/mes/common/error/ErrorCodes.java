@@ -28,6 +28,7 @@ public final class ErrorCodes {
     public static final String MENU_IN_USE = "MENU_IN_USE";
     public static final String MENU_PARENT_INVALID = "MENU_PARENT_INVALID";
     public static final String BUILTIN_PROTECTED = "BUILTIN_PROTECTED";
+    public static final String DEPT_NOT_EMPTY = "DEPT_NOT_EMPTY";
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
     public static final String CROSS_PLANT_REFERENCE = "CROSS_PLANT_REFERENCE";
     public static final String LAYOUT_INVALID = "LAYOUT_INVALID";

@@ -13,14 +13,22 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.xihua.mes.auth.CurrentContext;
 import com.xihua.mes.auth.PlantDirectory;
+import com.xihua.mes.auth.UserAdminGuard;
 import com.xihua.mes.common.error.ApiException;
+import com.xihua.mes.common.persistence.DataScopeBridge;
+import com.xihua.mes.common.persistence.DataScopeDecision;
+import com.xihua.mes.common.persistence.DataScopeHolder;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
 import com.xihua.mes.common.error.FieldError;
+import com.xihua.mes.org.domain.Dept;
 import com.xihua.mes.org.domain.Person;
 import com.xihua.mes.org.infra.AssignmentRow;
+import com.xihua.mes.org.infra.DeptMapper;
 import com.xihua.mes.org.infra.PersonMapper;
 import com.xihua.mes.org.infra.PersonPlantMapper;
+import com.xihua.mes.org.infra.PersonPostMapper;
+import com.xihua.mes.org.infra.PostMapper;
 
 /**
  * Person rows owned by the account API. Creating or deleting a person without its account is
@@ -32,19 +40,36 @@ public class PersonAccountService {
     private final PersonMapper persons;
     private final PersonPlantMapper assignments;
     private final PlantDirectory plants;
+    private final DeptMapper depts;
+    private final PostMapper posts;
+    private final PersonPostMapper personPosts;
+    private final UserAdminGuard guard;
 
-    public PersonAccountService(PersonMapper persons, PersonPlantMapper assignments, PlantDirectory plants) {
+    public PersonAccountService(
+            PersonMapper persons,
+            PersonPlantMapper assignments,
+            PlantDirectory plants,
+            DeptMapper depts,
+            PostMapper posts,
+            PersonPostMapper personPosts,
+            UserAdminGuard guard) {
         this.persons = persons;
         this.assignments = assignments;
         this.plants = plants;
+        this.depts = depts;
+        this.posts = posts;
+        this.personPosts = personPosts;
+        this.guard = guard;
     }
 
     public Person require(UUID id) {
-        Person person = persons.selectById(id);
-        if (person == null) {
-            throw ApiException.notFound("人员");
-        }
-        return person;
+        return DataScopeHolder.supplyUnscoped(() -> {
+            Person person = persons.selectById(id);
+            if (person == null) {
+                throw ApiException.notFound("人员");
+            }
+            return person;
+        });
     }
 
     public Person findByCode(String code) {
@@ -56,8 +81,13 @@ public class PersonAccountService {
         return Boolean.TRUE.equals(enabled);
     }
 
+    public List<UUID> postIds(UUID personId) {
+        return DataScopeHolder.supplyUnscoped(() -> personPosts.postIds(personId));
+    }
+
     @Transactional
-    public Person insert(String code, String name, String mobile, String email, String remark) {
+    public Person insert(String code, String name, String mobile, String email, String remark, UUID deptId) {
+        assertDept(deptId);
         Person person = new Person();
         person.setId(UUID.randomUUID());
         person.setCode(code);
@@ -66,6 +96,7 @@ public class PersonAccountService {
         person.setEmail(email);
         person.setEnabled(true);
         person.setRemark(remark);
+        person.setDeptId(deptId);
         person.setLockVersion(0);
         person.setDeleted(false);
         persons.insert(person);
@@ -73,19 +104,111 @@ public class PersonAccountService {
     }
 
     @Transactional
-    public void updateProfile(Person person, String name, String mobile, String email, String remark) {
+    public void updateProfile(
+            Person person, String name, String mobile, String email, String remark, boolean changeDept, UUID deptId) {
         person.setName(name);
         person.setMobile(mobile);
         person.setEmail(email);
         person.setRemark(remark);
-        if (persons.updateById(person) != 1) {
+        if (changeDept && !Objects.equals(person.getDeptId(), deptId)) {
+            assertDept(deptId);
+            person.setDeptId(deptId);
+        }
+        if (DataScopeHolder.supplyUnscoped(() -> persons.updateById(person)) != 1) {
             throw ApiException.staleVersion();
         }
     }
 
     @Transactional
+    public void replacePosts(UUID personId, List<UUID> postIds) {
+        List<UUID> ids = distinctRoles(postIds);
+        if (!ids.isEmpty()) {
+            List<UUID> found = posts.existingIds(ids);
+            if (found.size() != ids.size()) {
+                throw ApiException.validation(List.of(
+                        new FieldError("postIds", ErrorCodes.INVALID_VALUE, "岗位不存在")));
+            }
+        }
+        UUID actor = CurrentContext.userUuid();
+        DataScopeHolder.supplyUnscoped(() -> {
+            personPosts.deleteByPerson(personId);
+            for (UUID postId : ids) {
+                personPosts.insert(personId, postId, actor);
+            }
+            return null;
+        });
+    }
+
+    /**
+     * A department written onto a person must sit inside the caller's data scope.
+     * Null clears the department: allowed unless the only scopes are {@code SELF} (or none).
+     * Group-level departments are allowed for a super admin and for {@code ALL}/{@code PLANT}.
+     */
+    private void assertDept(UUID deptId) {
+        if (guard.superAdmin()) {
+            if (deptId != null) {
+                requireDeptInCurrentPlant(deptId);
+            }
+            return;
+        }
+        DataScopeDecision decision = DataScopeBridge.current();
+        if (deptId == null) {
+            if (!canClearDept(decision)) {
+                throw ApiException.permissionDenied("sys:user:update");
+            }
+            return;
+        }
+        Dept dept = requireDeptInCurrentPlant(deptId);
+        if (decision.wideOpen()) {
+            return;
+        }
+        if (dept.getPlantId() == null || !covers(dept, decision)) {
+            throw ApiException.permissionDenied("sys:user:update");
+        }
+    }
+
+    private static boolean canClearDept(DataScopeDecision decision) {
+        return decision.wideOpen()
+                || decision.has(DataScopeDecision.DEPT)
+                || decision.has(DataScopeDecision.DEPT_AND_CHILD)
+                || decision.has(DataScopeDecision.CUSTOM);
+    }
+
+    private static boolean covers(Dept dept, DataScopeDecision decision) {
+        if (decision.has(DataScopeDecision.DEPT) && dept.getId().equals(decision.deptId())) {
+            return true;
+        }
+        String ancestors = decision.ancestors();
+        if (decision.has(DataScopeDecision.DEPT_AND_CHILD)
+                && ancestors != null
+                && !ancestors.isBlank()
+                && dept.getAncestors() != null
+                && dept.getAncestors().startsWith(ancestors)) {
+            return true;
+        }
+        return decision.has(DataScopeDecision.CUSTOM)
+                && decision.customDeptIds() != null
+                && decision.customDeptIds().contains(dept.getId());
+    }
+
+    private Dept requireDeptInCurrentPlant(UUID deptId) {
+        Dept dept = depts.findAny(deptId);
+        if (dept == null) {
+            throw ApiException.validation(List.of(
+                    new FieldError("deptId", ErrorCodes.INVALID_VALUE, "部门不存在")));
+        }
+        UUID plantId = CurrentContext.requirePlantUuid();
+        if (dept.getPlantId() != null && !plantId.equals(dept.getPlantId())) {
+            throw ApiException.unprocessable(ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂",
+                    List.of(new FieldError("deptId", ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂")));
+        }
+        return dept;
+    }
+
+    @Transactional
     public void logicalDelete(UUID id) {
-        int rows = persons.update(null, new UpdateWrapper<Person>().set("deleted", true).eq("id", id));
+        int rows = DataScopeHolder.supplyUnscoped(() -> persons.update(null,
+                new UpdateWrapper<Person>().set("deleted", true).eq("id", id)));
         if (rows != 1) {
             throw ApiException.notFound("人员");
         }

@@ -5,8 +5,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import com.xihua.mes.auth.domain.SysUser;
-import com.xihua.mes.auth.infra.SysUserMapper;
+import com.xihua.mes.auth.infra.DataScopeMapper;
 
 /**
  * Cross-plant and self-grant limits apply to everyone except a super admin.
@@ -17,13 +16,13 @@ import com.xihua.mes.auth.infra.SysUserMapper;
 public class UserAdminGuard {
 
     private final String mode;
-    private final SysUserMapper users;
+    private final DataScopeMapper scopes;
 
     public UserAdminGuard(
             @Value("${mes.auth.mode:jwt}") String mode,
-            SysUserMapper users) {
+            DataScopeMapper scopes) {
         this.mode = mode == null ? PlantContextFilter.MODE_JWT : mode.trim();
-        this.users = users;
+        this.scopes = scopes;
     }
 
     public boolean superAdmin() {
@@ -39,7 +38,6 @@ public class UserAdminGuard {
         if (userId == null) {
             return false;
         }
-        SysUser user = users.selectById(userId);
-        return user != null && Boolean.TRUE.equals(user.getSuperAdmin());
+        return Boolean.TRUE.equals(scopes.superAdmin(userId));
     }
 }

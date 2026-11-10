@@ -100,6 +100,13 @@ public interface PersonPlantMapper {
             """)
     boolean workshopEnabledInPlant(@Param("id") UUID id, @Param("plantId") UUID plantId);
 
+    @Select("""
+            SELECT EXISTS (
+                SELECT 1 FROM org_person_plant
+                 WHERE person_id = #{personId} AND plant_id = #{plantId} AND active)
+            """)
+    boolean activeAssignment(@Param("personId") UUID personId, @Param("plantId") UUID plantId);
+
     @InterceptorIgnore(tenantLine = "true")
     @Select("""
             <script>

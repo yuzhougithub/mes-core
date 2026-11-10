@@ -1,5 +1,8 @@
 package com.xihua.mes.auth;
 
+import com.xihua.mes.common.persistence.DataScopeBridge;
+import com.xihua.mes.common.persistence.DataScopeHolder;
+
 /**
  * Request-scoped auth context façade (PR#5).
  * <p>
@@ -113,6 +116,8 @@ public final class CurrentContext {
         PERSON_ID.remove();
         JTI.remove();
         PlantContext.clear();
+        DataScopeHolder.clear();
+        DataScopeBridge.clear();
     }
 
     private static java.util.UUID parseUuid(String raw) {

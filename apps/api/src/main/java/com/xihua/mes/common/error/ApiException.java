@@ -131,6 +131,10 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorCodes.MENU_PARENT_INVALID, detail, List.of());
     }
 
+    public static ApiException deptNotEmpty() {
+        return unprocessable(ErrorCodes.DEPT_NOT_EMPTY, "部门下仍有子部门或人员", List.of());
+    }
+
     public static ApiException builtinProtected(String detail) {
         return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorCodes.BUILTIN_PROTECTED, detail, List.of());
     }

@@ -27,6 +27,7 @@ public enum PlantScope {
             Map.entry("cfg_code_rule", SHARED),
             Map.entry("cfg_file_object", SHARED),
             // plant-owned + plant extensions
+            Map.entry("org_dept", SHARED),
             Map.entry("org_workshop", PLANT),
             Map.entry("org_work_center", PLANT),
             Map.entry("org_person_plant", PLANT),

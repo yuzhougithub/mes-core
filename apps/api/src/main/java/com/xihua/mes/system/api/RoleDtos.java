@@ -32,6 +32,9 @@ public final class RoleDtos {
     public record RoleMenus(List<UUID> menuIds) {
     }
 
+    public record RoleDataScope(String dataScope, List<UUID> deptIds) {
+    }
+
     public record RoleView(
             UUID id,
             String code,

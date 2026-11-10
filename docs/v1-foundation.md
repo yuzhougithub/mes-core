@@ -12,7 +12,7 @@
 | 组织树：集团 → 工厂 → 车间 → 产线（只读投影） | ✔ | 多集团 / 多法人 |
 | 部门（树，工厂内）、岗位 | ✔ | |
 | 菜单 + 按钮权限点、角色、角色授权 | ✔ | 字段级权限、行为审批流 |
-| 统一数据权限（5 种范围） | ✔ | 按字段值的规则式数据权限（JeecgBoot 那种） |
+| 统一数据权限（6 种范围：ALL / PLANT / DEPT_AND_CHILD / DEPT / SELF / CUSTOM） | ✔ | 按字段值的规则式数据权限（JeecgBoot 那种） |
 | 字典（已有，补管理页与缓存） | ✔ | |
 | 系统参数 | ✔ | |
 | 编码规则（已有，放开业务类型，补管理页） | ✔ | |
@@ -52,10 +52,19 @@
 
 | 表 | 关键列 | 说明 |
 | --- | --- | --- |
-| `org_dept` | `plant_id` 可空，`parent_id`，`code`，`name`，`ancestors`（`/根id/…/本id/`），`leader_person_id`，`sort_no`，`enabled` | 部门树。`plant_id` 空 = 集团级部门。`ancestors` 用于“本部门及以下”前缀匹配；移动节点时同事务改子树 `ancestors`。有子部门或有人员时不可删 |
-| `org_post` | `code`，`name`，`sort_no`，`enabled` | 岗位，全局 |
+| `org_dept` | `plant_id` 可空，`parent_id`，`code`，`name`，`ancestors`（`/根id/…/本id/`），`leader_person_id`，`sort_no`，`enabled` | 部门树。`plant_id` 空 = 集团级部门。`ancestors` 用于“本部门及以下”前缀匹配；移动节点时同事务改子树 `ancestors`。有子部门或有人员时不可删。编码在同一 `plant_id` 内唯一（`plant_id` 空单独成组，`NULLS NOT DISTINCT`），重复 → 409 `DUPLICATE_CODE` |
+| `org_post` | `code`，`name`，`sort_no`，`enabled` | 岗位，全局。编码全局唯一，重复 → 409 `DUPLICATE_CODE`。被人员引用时不可删 → 409 `IN_USE` |
 | `org_person` | 加 `dept_id`（主部门） | |
-| `org_person_post` | `person_id`，`post_id` | 多对多 |
+| `org_person_post` | `person_id`，`post_id` | 多对多。厂级管理员可把**已有**岗位授给本厂人员，不能新建或修改岗位 |
+
+部门约束（F3 已确认）：
+
+- 集团级部门（`plant_id` 空）的创建、修改、删除、移动仅超级管理员。厂级管理员只能写当前工厂的部门。这两类共用 `org:dept:*`，不把整个接口标成 `global`，否则厂级管理员无法维护本厂部门。越权 → 403 `PERMISSION_DENIED`。
+- 父部门必须与本部门同工厂（双方 `plant_id` 都空，或相等）。跨工厂 → 422 `CROSS_PLANT_REFERENCE`。父节点不存在、移到自身或子孙下 → 422 `VALIDATION_FAILED`。库内另有同工厂触发器，以及推迟到提交的成环触发器。
+- `PUT /depts/{id}` 省略 `parentId` 时不改父节点；请求里显式带了 `parentId`（含 `null`）才移动。`POST /depts/{id}/move` 的 `parentId` 空表示移到根。
+- 有子部门或有人员时删除 → 422 `DEPT_NOT_EMPTY`。`enabled = false` 的部门仍计入数据范围；已删除的不计入。
+- `leader_person_id` 必须是当前工厂有有效任职的人员，否则 422 `VALIDATION_FAILED`。
+- 部门树与岗位**不**登记数据范围，只受各自的工厂可见性约束（部门是 `SHARED`：集团级或当前厂；岗位无 `plant_id`）。`EDITOR` / `VIEWER` 种子不含部门与岗位权限点。
 
 ### 3.2 账号与工厂绑定
 
@@ -122,7 +131,7 @@
 ### 4.2 功能权限
 
 - 后端：Controller 方法标 `@RequiresPerm("md:material:update")`（可多个，`anyOf`）。没有该注解且不在白名单（登录、健康检查）的接口启动时报错，防止漏标【假设 F5】。不满足 → 403 `PERMISSION_DENIED`，返回所需权限点编码。
-- **全局资源只允许超级管理员写**（F2）。`@RequiresPerm(global = true)` 的接口，非超级管理员一律 403，即使当前厂角色持有该权限点。已标 `global` 的写操作：工厂的创建 / 修改 / 删除；菜单的创建 / 修改 / 删除；角色定义的创建 / 修改 / 删除（含启用与停用）；`PUT /roles/{id}/menus`。厂级管理员仍可在本厂把**已有**角色授给其他用户（`POST /users`、`PUT /users/{id}/plants`）。此时每个角色的全部权限点必须是操作者在当前厂所持权限点的子集；非超级管理员改角色菜单时，除 `DIR` 外每个所选节点的 `perm_code` 也必须落在自己的权限内。超出 → 403 `PERMISSION_DENIED`。`header` 模式（仅 dev/test）仍视为完全访问，包含这些全局写操作。厂级 `ADMIN` 种子不含这些权限点。`GET /auth/me` 对非超级管理员也不返回它们。`/api/v1/plants`、`/api/v1/menus`、`/api/v1/roles` 下的 `POST` / `PUT` / `PATCH` / `DELETE` 未标 `global = true` 时启动失败。
+- **全局资源只允许超级管理员写**（F2，F3 补岗位与集团级部门）。`@RequiresPerm(global = true)` 的接口，非超级管理员一律 403，即使当前厂角色持有该权限点。已标 `global` 的写操作：工厂的创建 / 修改 / 删除；菜单的创建 / 修改 / 删除；角色定义的创建 / 修改 / 删除（含启用与停用）；`PUT /roles/{id}/menus`；`PUT /roles/{id}/data-scope`；岗位的创建 / 修改 / 删除。集团级部门的写不标在整个部门接口上，规则见 §3.1。厂级管理员仍可在本厂把**已有**角色授给其他用户（`POST /users`、`PUT /users/{id}/plants`），并把**已有**岗位授给本厂人员。此时每个角色的全部权限点必须是操作者在当前厂所持权限点的子集；非超级管理员改角色菜单时，除 `DIR` 外每个所选节点的 `perm_code` 也必须落在自己的权限内。超出 → 403 `PERMISSION_DENIED`。`header` 模式（仅 dev/test）仍视为完全访问，包含这些全局写操作。厂级 `ADMIN` 种子不含这些权限点。`GET /auth/me` 对非超级管理员也不返回它们。`/api/v1/plants`、`/api/v1/menus`、`/api/v1/roles`、`/api/v1/posts` 下的 `POST` / `PUT` / `PATCH` / `DELETE` 未标 `global = true` 时启动失败。
 - 前端：登录后取 `GET /auth/me`，拿到菜单树和权限点集合；路由按菜单生成；按钮用 `<Perm code="…">` 包裹，无权限不渲染（不是置灰）。前端只做体验，后端是唯一裁决。
 
 ### 4.3 数据权限
@@ -139,14 +148,17 @@
 | `PLANT` | 本工厂全部 | 无附加条件 |
 | `DEPT_AND_CHILD` | 本部门及以下 | `dept_id IN (SELECT id FROM org_dept WHERE ancestors LIKE :myAncestors || '%')` |
 | `DEPT` | 仅本部门 | `dept_id = :myDept` |
-| `SELF` | 仅本人 | `created_by = :myUserId`（或表登记的负责人列） |
-| `CUSTOM` | 自定义部门 | `dept_id IN (:roleDeptIds)` |
+| `SELF` | 仅本人 | 默认 `created_by = :myUserId`。`sys_user` 用 `id = :myUserId`（当前账号，不是创建人）。`sys_oper_log` 用 `user_id = :myUserId` |
+| `CUSTOM` | 自定义部门 | `dept_id IN (:roleDeptIds)`。集合为空则匹配不到行 |
 
 - 用户在当前工厂有多个角色时取并集：任一角色是 `ALL`/`PLANT` 即不加条件；否则各角色条件 `OR` 合并。
 - 生效方式：表登记 + 注解。`DataScopeTable` 登记哪些表参与以及用哪个部门列、本人列（与 `PlantScope` 同一风格）；Mapper 方法或 Service 方法标 `@DataScope`（可选 `alias` 指定多表 join 时作用的表别名）才启用，未标的方法不加条件。实现基于 MyBatis-Plus `DataPermissionInterceptor` + `MultiDataPermissionHandler`，放在分页拦截器之前。
-- 主数据（物料、BOM 等）是工厂级共享资源，**不登记**数据范围，只受第一层约束。V1 登记：`org_person`（`dept_id`、`created_by`）、`sys_user`（经 `person.dept_id`）、`sys_oper_log`（`user_id`）。工单等后续业务表建表时带 `dept_id` 并登记。
+- 主数据（物料、BOM 等）是工厂级共享资源，**不登记**数据范围，只受第一层约束。V1 登记：`org_person`（`dept_id`、`created_by`）、`sys_user`（部门经 `person.dept_id`，本人列 `id`）、`sys_oper_log`（`user_id`；该表没有部门列，部门类范围匹配不到行）。部门树和岗位不登记。工单等后续业务表建表时带 `dept_id` 并登记。
+- 多个角色取并集，见上。`PUT /roles/{id}/data-scope` 写入 `dataScope` 与 `CUSTOM` 的部门集合，且为 `global`。`CUSTOM` 的部门必须是当前工厂的部门或集团级部门（`plant_id` 空）；其它工厂的部门 → 422 `CROSS_PLANT_REFERENCE`。范围不是 `CUSTOM` 时忽略 `deptIds` 并清空集合。查询时丢掉已删除的自定义部门，也丢掉不属于当前工厂且不是集团级的部门。
+- 非超级管理员不能改自己的主部门（403），即使用户本来就在自己的数据范围内。给他人指定主部门时，部门必须落在操作者当前厂的数据范围内：`ALL` / `PLANT` 为本厂任意部门，并可以指定集团级部门；`DEPT_AND_CHILD` 只限本人子树；`DEPT` 只限本人部门；`CUSTOM` 只限自定义集合里的本厂部门；`SELF` 不能指定部门。集团级部门仅超级管理员或 `ALL` / `PLANT` 可指定。超出 → 403 `PERMISSION_DENIED`。
+- `enabled = false` 的部门仍计入“本部门 / 本部门及以下 / 自定义部门”；已删除的部门不计入。
 - 按 id 读一条超出数据范围的记录 → 404（与跨厂一致，不暴露存在性）；写超出范围的记录同样 404。
-- `super_admin` 跳过第二层，但仍受第一层（当前工厂）约束，跨厂只走 `@CrossPlant`。
+- `super_admin` 跳过第二层，但仍受第一层（当前工厂）约束，跨厂只走 `@CrossPlant`。超级管理员的 `@CrossPlant` 不再加工厂条件，不限定为任职工厂。`ALL` 的 `@CrossPlant` 仍限定为本人有效任职的工厂。
 
 ### 4.4 审计
 
@@ -163,10 +175,10 @@
 | 认证 | `POST /auth/login`、`POST /auth/refresh`、`POST /auth/logout`、`POST /auth/switch-plant`、`POST /auth/change-password`、`GET /auth/me`（用户、当前工厂、可切换工厂、菜单树、权限点） | 匿名 / 登录 |
 | 用户 | `GET/POST /users`、`GET/PUT/DELETE /users/{id}`、`POST /users/{id}/enable`、`/disable`、`/unlock`、`/reset-password`、`PUT /users/{id}/plants`（任职 + 每厂角色 + 默认工厂整体替换） | `sys:user:*`，`sys:user:reset-pwd`、`sys:user:grant` |
 | 组织树 | `GET /org/tree`（集团 → 工厂 → 车间 → 产线） | 登录 |
-| 部门 | `GET /depts/tree`、`POST /depts`、`PUT/DELETE /depts/{id}`、`POST /depts/{id}/move` | `org:dept:*` |
-| 岗位 | `GET/POST /posts`、`PUT/DELETE /posts/{id}` | `org:post:*` |
+| 部门 | `GET /depts/tree`、`POST /depts`、`PUT/DELETE /depts/{id}`、`POST /depts/{id}/move` | `org:dept:*`。集团级部门（`plant_id` 空）的写仅超级管理员，见 §3.1 |
+| 岗位 | `GET /posts`；`POST /posts`、`PUT/DELETE /posts/{id}` | 读 `org:post:list/view`；创建 / 修改 / 删除为 `global`，仅超级管理员。厂级管理员可把已有岗位授给本厂人员 |
 | 菜单 | `GET /menus/tree`、`GET /menus/{id}`、`POST /menus`、`PUT /menus/{id}`（含改父节点）、`DELETE /menus/{id}?lockVersion=` | `sys:menu:list/view` 登录角色；`create/update/delete` 为 `global`，仅超级管理员 |
-| 角色 | `GET/POST /roles`、`PUT/DELETE /roles/{id}`、`GET/PUT /roles/{id}/menus`、`PUT /roles/{id}/data-scope`（`dataScope` + `deptIds`）、`GET /roles/{id}/users` | 读 `sys:role:list/view`；角色定义写与 `PUT /menus` 为 `global`，仅超级管理员。厂级管理员可按 §4.2 把已有角色授给本厂用户 |
+| 角色 | `GET/POST /roles`、`PUT/DELETE /roles/{id}`、`GET/PUT /roles/{id}/menus`、`PUT /roles/{id}/data-scope`（`dataScope` + `deptIds`）、`GET /roles/{id}/users` | 读 `sys:role:list/view`；角色定义写、`PUT /menus` 与 `PUT /data-scope` 为 `global`，仅超级管理员。厂级管理员可按 §4.2 把已有角色授给本厂用户 |
 | 字典 | 已有 `/dict-types`、`/dict-items`；新增 `GET /dicts/{typeCode}`（前端缓存用，带 `ETag`） | 已有 / 登录 |
 | 系统参数 | `GET /configs`、`PUT /configs/{key}`；`GET /configs/public`（前端可读子集） | `sys:config:*` / 匿名 |
 | 编码规则 | 已有 `/code-rules`；新增 `POST /code-rules/{id}/preview`（不占号） | `sys:code-rule:*` |
@@ -191,6 +203,7 @@
 | F1 | 组织树不建统一节点表；产线 = 类型为 `LINE` 的工作中心 |
 | F2 | 已确认：人员与账号严格一对一，每个人员都有账号 |
 | F3 | 已确认：菜单可在页面增删改，种子仅作初始数据 |
+| F7 | 已确认：数据范围按 §4.3 的 6 种（含 `ALL`）。集团级部门写与岗位写仅超级管理员；厂级管理员可写本厂部门，并把已有岗位授给本厂人员。`sys_user` 的“仅本人”按账号 `id`。`PUT /depts/{id}` 省略 `parentId` 不移动。部门编码同厂唯一、岗位编码全局唯一。`PUT /roles/{id}/data-scope` 为 `global`；空的 `CUSTOM` 集合匹配不到行。停用部门仍计入范围。部门树和岗位不做单独的数据范围。`EDITOR` / `VIEWER` 不含部门与岗位权限。超级管理员的 `@CrossPlant` 不限定任职工厂 |
 | F4 | 两张日志表按月分区，操作日志保留 180 天 |
 | F5 | 写接口漏标 `@RequiresPerm` 时启动失败 |
 | F6 | 敏感字段明文需要单独权限点 |
