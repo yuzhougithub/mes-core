@@ -29,13 +29,15 @@ class WriteEndpointGuardTest {
                 RequestMappingInfo.paths("/api/v1/plants").methods(RequestMethod.POST).build(), method,
                 RequestMappingInfo.paths("/api/v1/menus/{id}").methods(RequestMethod.PATCH).build(), method,
                 RequestMappingInfo.paths("/api/v1/roles/{id}").methods(RequestMethod.DELETE).build(), method,
-                RequestMappingInfo.paths("/api/v1/roles/{id}/menus").methods(RequestMethod.PUT).build(), method)));
+                RequestMappingInfo.paths("/api/v1/roles/{id}/menus").methods(RequestMethod.PUT).build(), method,
+                RequestMappingInfo.paths("/api/v1/posts").methods(RequestMethod.POST).build(), method)));
         assertThat(ex.getMessage())
                 .contains("全局写接口未标注 @RequiresPerm(global = true)")
                 .contains("POST /api/v1/plants")
                 .contains("PATCH /api/v1/menus/{id}")
                 .contains("DELETE /api/v1/roles/{id}")
-                .contains("PUT /api/v1/roles/{id}/menus");
+                .contains("PUT /api/v1/roles/{id}/menus")
+                .contains("POST /api/v1/posts");
     }
 
     @Test

@@ -41,6 +41,8 @@ public interface DataScopeMapper {
               JOIN org_role r ON r.id = pr.role_id AND NOT r.deleted AND r.enabled
                    AND r.data_scope = 'CUSTOM'
               JOIN sys_role_data_dept rd ON rd.role_id = r.id
+            JOIN org_dept d ON d.id = rd.dept_id AND NOT d.deleted
+             AND (d.plant_id IS NULL OR d.plant_id = #{plantId})
              WHERE pp.person_id = #{personId}
                AND pp.plant_id = #{plantId}
                AND pp.active

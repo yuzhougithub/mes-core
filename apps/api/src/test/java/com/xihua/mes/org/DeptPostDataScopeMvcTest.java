@@ -476,6 +476,118 @@ class DeptPostDataScopeMvcTest extends PgIntegrationTest {
                 .andExpect(jsonPath("$.person.postIds[0]").value(postId));
     }
 
+    @Test
+    void deptAndChildUserCannotChangeOwnDepartment() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String mine = dept(adminToken, uniq("D"), "本部", null);
+        String below = dept(adminToken, uniq("D"), "下级", mine);
+        String roleId = scopedRole(adminToken, "DEPT_AND_CHILD");
+        Account caller = account(admin.plantId(), false, roleId);
+        place(caller, mine, admin.userId());
+
+        mvc.perform(bearer(put("/api/v1/users/" + caller.userId()), token(caller))
+                        .content("""
+                                {"username":"%s","name":"测试","lockVersion":0,"org":{"deptId":"%s"}}
+                                """.formatted(caller.username(), below)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        assertThat(jdbc.queryForObject(
+                "SELECT dept_id::text FROM org_person WHERE id = ?::uuid", String.class, caller.personId()))
+                .isEqualTo(mine);
+    }
+
+    @Test
+    void cannotAssignPersonOutsideDataScope() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String mine = dept(adminToken, uniq("D"), "本部", null);
+        String below = dept(adminToken, uniq("D"), "下级", mine);
+        String outside = dept(adminToken, uniq("D"), "外部门", null);
+        String roleId = scopedRole(adminToken, "DEPT_AND_CHILD");
+        Account caller = account(admin.plantId(), false, roleId);
+        Account colleague = account(admin.plantId(), false);
+        place(caller, mine, admin.userId());
+        place(colleague, mine, admin.userId());
+        String callerToken = token(caller);
+
+        mvc.perform(bearer(put("/api/v1/users/" + colleague.userId()), callerToken)
+                        .content("""
+                                {"username":"%s","name":"测试","lockVersion":0,"org":{"deptId":"%s"}}
+                                """.formatted(colleague.username(), outside)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        mvc.perform(bearer(put("/api/v1/users/" + colleague.userId()), callerToken)
+                        .content("""
+                                {"username":"%s","name":"测试","lockVersion":0,"org":{"deptId":"%s"}}
+                                """.formatted(colleague.username(), below)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.person.deptId").value(below));
+    }
+
+    @Test
+    void leaderMustWorkInTheCurrentPlant() throws Exception {
+        Account admin = account(null, true);
+        String token = token(admin);
+        Account other = account(insertPlant(), false);
+        mvc.perform(bearer(post("/api/v1/depts"), token)
+                        .content("""
+                                {"code":"%s","name":"装配","leaderPersonId":"%s"}
+                                """.formatted(uniq("D"), other.personId())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].field").value("leaderPersonId"));
+        mvc.perform(bearer(post("/api/v1/depts"), token)
+                        .content("""
+                                {"code":"%s","name":"装配","leaderPersonId":"%s"}
+                                """.formatted(uniq("D"), admin.personId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.leaderPersonId").value(admin.personId()));
+    }
+
+    @Test
+    void customDeptRejectsOtherPlantsAndSkipsDeleted() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String local = dept(adminToken, uniq("D"), "本厂", null);
+        String otherPlant = insertPlant();
+        String foreign = insertDept(otherPlant, uniq("D"));
+        String roleId = body(mvc.perform(bearer(post("/api/v1/roles"), adminToken)
+                        .content("{\"code\":\"" + roleCode() + "\",\"name\":\"自定义\",\"dataScope\":\"PLANT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asString();
+        mvc.perform(bearer(put("/api/v1/roles/" + roleId + "/data-scope"), adminToken)
+                        .content("{\"dataScope\":\"CUSTOM\",\"deptIds\":[\"" + foreign + "\"]}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("CROSS_PLANT_REFERENCE"));
+        mvc.perform(bearer(put("/api/v1/roles/" + roleId + "/menus"), adminToken)
+                        .content("{\"menuIds\":[\"" + USER_LIST + "\",\"" + USER_VIEW + "\"]}"))
+                .andExpect(status().isOk());
+        mvc.perform(bearer(put("/api/v1/roles/" + roleId + "/data-scope"), adminToken)
+                        .content("{\"dataScope\":\"CUSTOM\",\"deptIds\":[\"" + local + "\"]}"))
+                .andExpect(status().isOk());
+
+        Account caller = account(admin.plantId(), false, roleId);
+        Account inside = account(admin.plantId(), false);
+        place(caller, local, admin.userId());
+        place(inside, local, admin.userId());
+        String callerToken = token(caller);
+        assertUsernames(callerToken, caller.username(), inside.username());
+
+        jdbc.update("UPDATE org_dept SET deleted = true WHERE id = ?::uuid", local);
+        assertUsernames(callerToken);
+    }
+
+    private String scopedRole(String adminToken, String dataScope) throws Exception {
+        String roleId = body(mvc.perform(bearer(post("/api/v1/roles"), adminToken)
+                        .content("{\"code\":\"" + roleCode() + "\",\"name\":\"范围\",\"dataScope\":\"" + dataScope + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asString();
+        mvc.perform(bearer(put("/api/v1/roles/" + roleId + "/menus"), adminToken)
+                        .content("{\"menuIds\":[\"" + USER_LIST + "\",\"" + USER_VIEW + "\",\"" + USER_UPDATE + "\"]}"))
+                .andExpect(status().isOk());
+        return roleId;
+    }
+
     private void assertUsernames(String token, String... expected) throws Exception {
         assertThat(usernames(token)).containsExactlyInAnyOrder(expected);
     }

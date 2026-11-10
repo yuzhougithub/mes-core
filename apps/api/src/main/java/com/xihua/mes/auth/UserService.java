@@ -223,8 +223,12 @@ public class UserService {
         Person person = accounts.require(user.getPersonId());
         UUID previousDept = person.getDeptId();
         boolean changeDept = req.org() != null;
-        accounts.updateProfile(person, name, mobile, email, remark, changeDept,
-                changeDept ? req.org().deptId() : null);
+        UUID nextDept = changeDept ? req.org().deptId() : null;
+        if (changeDept && !Objects.equals(previousDept, nextDept)
+                && !guard.superAdmin() && id.equals(CurrentContext.userUuid())) {
+            throw ApiException.permissionDenied("sys:user:update");
+        }
+        accounts.updateProfile(person, name, mobile, email, remark, changeDept, nextDept);
         if (changeDept) {
             accounts.replacePosts(person.getId(), req.org().postIds());
             if (!Objects.equals(previousDept, req.org().deptId())) {

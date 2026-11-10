@@ -13,7 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.xihua.mes.auth.CurrentContext;
 import com.xihua.mes.auth.PlantDirectory;
+import com.xihua.mes.auth.UserAdminGuard;
 import com.xihua.mes.common.error.ApiException;
+import com.xihua.mes.common.persistence.DataScopeBridge;
+import com.xihua.mes.common.persistence.DataScopeDecision;
 import com.xihua.mes.common.persistence.DataScopeHolder;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
@@ -40,6 +43,7 @@ public class PersonAccountService {
     private final DeptMapper depts;
     private final PostMapper posts;
     private final PersonPostMapper personPosts;
+    private final UserAdminGuard guard;
 
     public PersonAccountService(
             PersonMapper persons,
@@ -47,13 +51,15 @@ public class PersonAccountService {
             PlantDirectory plants,
             DeptMapper depts,
             PostMapper posts,
-            PersonPostMapper personPosts) {
+            PersonPostMapper personPosts,
+            UserAdminGuard guard) {
         this.persons = persons;
         this.assignments = assignments;
         this.plants = plants;
         this.depts = depts;
         this.posts = posts;
         this.personPosts = personPosts;
+        this.guard = guard;
     }
 
     public Person require(UUID id) {
@@ -104,7 +110,7 @@ public class PersonAccountService {
         person.setMobile(mobile);
         person.setEmail(email);
         person.setRemark(remark);
-        if (changeDept) {
+        if (changeDept && !Objects.equals(person.getDeptId(), deptId)) {
             assertDept(deptId);
             person.setDeptId(deptId);
         }
@@ -133,10 +139,59 @@ public class PersonAccountService {
         });
     }
 
+    /**
+     * A department written onto a person must sit inside the caller's data scope.
+     * Null clears the department: allowed unless the only scopes are {@code SELF} (or none).
+     * Group-level departments are allowed for a super admin and for {@code ALL}/{@code PLANT}.
+     */
     private void assertDept(UUID deptId) {
-        if (deptId == null) {
+        if (guard.superAdmin()) {
+            if (deptId != null) {
+                requireDeptInCurrentPlant(deptId);
+            }
             return;
         }
+        DataScopeDecision decision = DataScopeBridge.current();
+        if (deptId == null) {
+            if (!canClearDept(decision)) {
+                throw ApiException.permissionDenied("sys:user:update");
+            }
+            return;
+        }
+        Dept dept = requireDeptInCurrentPlant(deptId);
+        if (decision.wideOpen()) {
+            return;
+        }
+        if (dept.getPlantId() == null || !covers(dept, decision)) {
+            throw ApiException.permissionDenied("sys:user:update");
+        }
+    }
+
+    private static boolean canClearDept(DataScopeDecision decision) {
+        return decision.wideOpen()
+                || decision.has(DataScopeDecision.DEPT)
+                || decision.has(DataScopeDecision.DEPT_AND_CHILD)
+                || decision.has(DataScopeDecision.CUSTOM);
+    }
+
+    private static boolean covers(Dept dept, DataScopeDecision decision) {
+        if (decision.has(DataScopeDecision.DEPT) && dept.getId().equals(decision.deptId())) {
+            return true;
+        }
+        String ancestors = decision.ancestors();
+        if (decision.has(DataScopeDecision.DEPT_AND_CHILD)
+                && ancestors != null
+                && !ancestors.isBlank()
+                && dept.getAncestors() != null
+                && dept.getAncestors().startsWith(ancestors)) {
+            return true;
+        }
+        return decision.has(DataScopeDecision.CUSTOM)
+                && decision.customDeptIds() != null
+                && decision.customDeptIds().contains(dept.getId());
+    }
+
+    private Dept requireDeptInCurrentPlant(UUID deptId) {
         Dept dept = depts.findAny(deptId);
         if (dept == null) {
             throw ApiException.validation(List.of(
@@ -147,6 +202,7 @@ public class PersonAccountService {
             throw ApiException.unprocessable(ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂",
                     List.of(new FieldError("deptId", ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂")));
         }
+        return dept;
     }
 
     @Transactional

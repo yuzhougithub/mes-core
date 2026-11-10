@@ -20,7 +20,8 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 /**
  * Fails startup when a write under {@code /api} has no {@link RequiresPerm}
  * and is not on {@link PermAllowlist}, and when a write under {@code /api/v1/plants},
- * {@code /api/v1/menus}, or {@code /api/v1/roles} is not {@link RequiresPerm#global()}.
+ * {@code /api/v1/menus}, {@code /api/v1/roles}, or {@code /api/v1/posts} is not
+ * {@link RequiresPerm#global()}.
  * Reads are enforced at runtime when annotated, and do not fail startup.
  */
 @Component
@@ -143,7 +144,7 @@ public class WriteEndpointGuard implements SmartInitializingSingleton {
     }
 
     /**
-     * A write under plants, menus, or roles must be superadmin-only.
+     * A write under plants, menus, roles, or posts must be superadmin-only.
      * Unannotated writes are reported by {@link #problem} instead.
      */
     static String globalProblem(RequestMappingInfo info, HandlerMethod method) {
@@ -191,7 +192,8 @@ public class WriteEndpointGuard implements SmartInitializingSingleton {
         }
         return normalized.equals("/api/v1/plants") || normalized.startsWith("/api/v1/plants/")
                 || normalized.equals("/api/v1/menus") || normalized.startsWith("/api/v1/menus/")
-                || normalized.equals("/api/v1/roles") || normalized.startsWith("/api/v1/roles/");
+                || normalized.equals("/api/v1/roles") || normalized.startsWith("/api/v1/roles/")
+                || normalized.equals("/api/v1/posts") || normalized.startsWith("/api/v1/posts/");
     }
 
     private static boolean annotated(HandlerMethod method) {

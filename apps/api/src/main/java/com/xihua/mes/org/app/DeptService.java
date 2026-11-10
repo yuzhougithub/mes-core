@@ -29,6 +29,7 @@ import com.xihua.mes.org.api.DeptDtos.DeptWrite;
 import com.xihua.mes.org.domain.Dept;
 import com.xihua.mes.org.infra.DeptMapper;
 import com.xihua.mes.org.infra.PersonMapper;
+import com.xihua.mes.org.infra.PersonPlantMapper;
 
 @Service
 public class DeptService {
@@ -38,12 +39,19 @@ public class DeptService {
 
     private final DeptMapper depts;
     private final PersonMapper persons;
+    private final PersonPlantMapper assignments;
     private final JdbcTemplate jdbc;
     private final UserAdminGuard guard;
 
-    public DeptService(DeptMapper depts, PersonMapper persons, JdbcTemplate jdbc, UserAdminGuard guard) {
+    public DeptService(
+            DeptMapper depts,
+            PersonMapper persons,
+            PersonPlantMapper assignments,
+            JdbcTemplate jdbc,
+            UserAdminGuard guard) {
         this.depts = depts;
         this.persons = persons;
+        this.assignments = assignments;
         this.jdbc = jdbc;
         this.guard = guard;
     }
@@ -209,6 +217,10 @@ public class DeptService {
         if (persons.selectById(leaderPersonId) == null) {
             throw ApiException.validation(List.of(
                     new FieldError("leaderPersonId", ErrorCodes.INVALID_VALUE, "负责人不存在")));
+        }
+        if (!assignments.activeAssignment(leaderPersonId, CurrentContext.requirePlantUuid())) {
+            throw ApiException.validation(List.of(
+                    new FieldError("leaderPersonId", ErrorCodes.INVALID_VALUE, "负责人须在当前工厂任职")));
         }
     }
 

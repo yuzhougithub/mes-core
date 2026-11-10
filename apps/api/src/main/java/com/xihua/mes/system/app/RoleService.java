@@ -215,10 +215,17 @@ public class RoleService {
         if ("CUSTOM".equals(scope)) {
             deptIds = req.deptIds() == null ? List.of() : req.deptIds().stream()
                     .filter(Objects::nonNull).distinct().toList();
+            UUID plantId = CurrentContext.requirePlantUuid();
             for (UUID deptId : deptIds) {
-                if (depts.findAny(deptId) == null) {
+                var dept = depts.findAny(deptId);
+                if (dept == null) {
                     throw ApiException.validation(List.of(
                             new FieldError("deptIds", ErrorCodes.INVALID_VALUE, "部门不存在")));
+                }
+                if (dept.getPlantId() != null && !plantId.equals(dept.getPlantId())) {
+                    throw ApiException.unprocessable(ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂",
+                            List.of(new FieldError("deptIds", ErrorCodes.CROSS_PLANT_REFERENCE,
+                                    "部门不属于当前工厂")));
                 }
             }
         }
