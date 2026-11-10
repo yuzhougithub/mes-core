@@ -240,9 +240,7 @@ public class UserService {
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
-        if ("DISABLED".equals(status)) {
-            requireOnlyCurrentPlant(user);
-        }
+        requireOnlyCurrentPlant(user);
         Locks.check(lockVersion, user.getLockVersion());
         if ("DISABLED".equals(status) && id.equals(CurrentContext.userUuid())) {
             throw ApiException.stateConflict("不能停用当前登录账号");
@@ -338,8 +336,8 @@ public class UserService {
     }
 
     /**
-     * Delete, disable, unlock, and reset are refused when the user still has an active
-     * assignment outside the caller's plant. A super admin is not limited.
+     * Enable, disable, delete, unlock, and reset are refused when the user still has an
+     * active assignment outside the caller's plant. A super admin is not limited.
      */
     private void requireOnlyCurrentPlant(SysUser user) {
         if (guard.superAdmin()) {

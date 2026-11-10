@@ -494,6 +494,13 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(bearer(delete("/api/v1/users/" + targetId + "?lockVersion=0"), token))
                 .andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/v1/users/" + targetId + "/disable"), superToken)
+                        .content("{\"lockVersion\":0}"))
+                .andExpect(status().isOk());
+        mvc.perform(bearer(post("/api/v1/users/" + targetId + "/enable"), token)
+                        .content("{\"lockVersion\":1}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
 
         MvcResult local = mvc.perform(bearer(post("/api/v1/users"), superToken)
                         .content(userJson(uniq("L"), admin.plantId, true, "Init@Pass1")))

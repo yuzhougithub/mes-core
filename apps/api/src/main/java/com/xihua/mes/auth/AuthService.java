@@ -93,7 +93,7 @@ public class AuthService {
         }
         OffsetDateTime now = now();
         expireLockIfDue(user, now);
-        if (!matches) {
+        if (!matches || unusable) {
             if (usableAccount(user) && !locked(user)) {
                 users.registerFailure(user.getId(), policy.maxFailures(), now.plusMinutes(policy.lockMinutes()), now);
             }
