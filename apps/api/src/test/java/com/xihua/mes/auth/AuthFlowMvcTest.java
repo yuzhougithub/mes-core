@@ -74,8 +74,8 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                 .andExpect(jsonPath("$.person.code").exists())
                 .andExpect(jsonPath("$.plant.id").value(fx.plantId))
                 .andExpect(jsonPath("$.plants[0].isDefault").value(true))
-                .andExpect(jsonPath("$.permissions").isEmpty())
-                .andExpect(jsonPath("$.menus").isEmpty());
+                .andExpect(jsonPath("$.permissions").isNotEmpty())
+                .andExpect(jsonPath("$.menus").isNotEmpty());
 
         mvc.perform(bearer(get("/api/v1/uoms"), body.get("accessToken").asString()))
                 .andExpect(status().isOk());
@@ -216,8 +216,8 @@ class AuthFlowMvcTest extends PgIntegrationTest {
         String token = body(first).get("accessToken").asString();
         String refresh = refreshValue(first);
         mvc.perform(bearer(get("/api/v1/auth/me"), token))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PASSWORD_CHANGE_REQUIRED"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.mustChangePassword").value(true));
 
         change(token, "Init@Pass1", "Ab1!").andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PASSWORD_POLICY"));

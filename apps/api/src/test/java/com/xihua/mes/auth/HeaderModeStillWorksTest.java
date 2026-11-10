@@ -24,8 +24,8 @@ class HeaderModeStillWorksTest extends PgIntegrationTest {
                 .andExpect(jsonPath("$.user.id").value(userId))
                 .andExpect(jsonPath("$.plant.id").value(plantId))
                 .andExpect(jsonPath("$.roles[0]").value("ADMIN"))
-                .andExpect(jsonPath("$.permissions").isEmpty())
-                .andExpect(jsonPath("$.menus").isEmpty());
+                .andExpect(jsonPath("$.permissions").isNotEmpty())
+                .andExpect(jsonPath("$.menus").isNotEmpty());
 
         String realPlant = createPlant();
         mvc.perform(get("/api/v1/uoms").header(PlantContextFilter.HEADER_PLANT_ID, realPlant))

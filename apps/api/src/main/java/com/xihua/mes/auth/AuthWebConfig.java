@@ -10,23 +10,31 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class AuthWebConfig implements WebMvcConfigurer {
 
     private final ObjectProvider<PlantDirectory> plantDirectory;
+    private final ObjectProvider<PermissionService> permissions;
 
-    public AuthWebConfig(ObjectProvider<PlantDirectory> plantDirectory) {
+    public AuthWebConfig(
+            ObjectProvider<PlantDirectory> plantDirectory,
+            ObjectProvider<PermissionService> permissions) {
         this.plantDirectory = plantDirectory;
+        this.permissions = permissions;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         PlantDirectory directory = plantDirectory.getIfAvailable();
-        if (directory == null) {
-            return;
+        if (directory != null) {
+            registry.addInterceptor(new PlantAccessInterceptor(directory))
+                    .addPathPatterns("/api/v1/**")
+                    .excludePathPatterns(
+                            "/api/v1/plants",
+                            "/api/v1/plants/**",
+                            "/api/v1/auth",
+                            "/api/v1/auth/**");
         }
-        registry.addInterceptor(new PlantAccessInterceptor(directory))
-                .addPathPatterns("/api/v1/**")
-                .excludePathPatterns(
-                        "/api/v1/plants",
-                        "/api/v1/plants/**",
-                        "/api/v1/auth",
-                        "/api/v1/auth/**");
+        PermissionService permissionService = permissions.getIfAvailable();
+        if (permissionService != null) {
+            registry.addInterceptor(new PermissionInterceptor(permissionService))
+                    .addPathPatterns("/api/v1/**");
+        }
     }
 }

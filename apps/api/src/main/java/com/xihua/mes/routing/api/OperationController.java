@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
 import com.xihua.mes.routing.api.OperationDtos.OperationCreate;
@@ -31,17 +32,20 @@ public class OperationController {
     }
 
     @GetMapping
+    @RequiresPerm("rtg:operation:list")
     public PageResult<OperationView> list(HttpServletRequest request, @RequestParam(required = false) String q) {
         return service.list(PageQuery.from(request), q);
     }
 
     @PostMapping
+    @RequiresPerm("rtg:operation:create")
     public ResponseEntity<OperationView> create(@RequestBody OperationCreate req) {
         OperationView view = service.create(req);
         return ResponseEntity.created(URI.create("/api/v1/operations/" + view.id())).body(view);
     }
 
     @GetMapping("/{id}")
+    @RequiresPerm("rtg:operation:view")
     public OperationView get(@PathVariable UUID id) {
         return service.get(id);
     }

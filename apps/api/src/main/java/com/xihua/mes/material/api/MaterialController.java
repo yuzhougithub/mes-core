@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
 import com.xihua.mes.material.api.MaterialDtos.LockRequest;
@@ -37,6 +38,7 @@ public class MaterialController {
     }
 
     @GetMapping
+    @RequiresPerm("md:material:list")
     public PageResult<MaterialView> list(HttpServletRequest request,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String status,
@@ -49,43 +51,51 @@ public class MaterialController {
     }
 
     @PostMapping
+    @RequiresPerm("md:material:create")
     public ResponseEntity<MaterialView> create(@RequestBody MaterialCreate req) {
         MaterialView view = service.create(req);
         return ResponseEntity.created(URI.create("/api/v1/materials/" + view.id())).body(view);
     }
 
     @GetMapping("/{id}")
+    @RequiresPerm("md:material:view")
     public MaterialView get(@PathVariable UUID id) {
         return service.get(id);
     }
 
     @PutMapping("/{id}")
+    @RequiresPerm("md:material:update")
     public MaterialView update(@PathVariable UUID id, @RequestBody MaterialUpdate req) {
         return service.update(id, req);
     }
 
     @DeleteMapping("/{id}")
+    @RequiresPerm("md:material:delete")
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         service.delete(id, lockVersion);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/release")
+    @RequiresPerm("md:material:release")
     public MaterialView release(@PathVariable UUID id, @RequestBody LockRequest req) {
         return service.release(id, req.lockVersion());
     }
 
     @PostMapping("/{id}/obsolete")
+    @RequiresPerm("md:material:obsolete")
     public MaterialView obsolete(@PathVariable UUID id, @RequestBody LockRequest req) {
         return service.obsolete(id, req.lockVersion());
     }
 
     @GetMapping("/{id}/plant-ext")
+    @RequiresPerm("md:material:view")
     public PlantExtView getPlantExt(@PathVariable UUID id) {
         return service.getPlantExt(id);
     }
 
     @PutMapping("/{id}/plant-ext")
+    @RequiresPerm("md:material:update")
     public PlantExtView putPlantExt(@PathVariable UUID id, @RequestBody PlantExtPut req) {
         return service.putPlantExt(id, req);
     }

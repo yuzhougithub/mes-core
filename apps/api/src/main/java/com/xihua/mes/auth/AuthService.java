@@ -53,6 +53,7 @@ public class AuthService {
     private final JwtService jwt;
     private final PasswordEncoder encoder;
     private final SecurityPolicyService policies;
+    private final PermissionService permissions;
     private final Clock clock;
     private final String dummyHash;
 
@@ -65,6 +66,7 @@ public class AuthService {
             JwtService jwt,
             PasswordEncoder encoder,
             SecurityPolicyService policies,
+            PermissionService permissions,
             Clock clock) {
         this.users = users;
         this.refreshTokens = refreshTokens;
@@ -74,6 +76,7 @@ public class AuthService {
         this.jwt = jwt;
         this.encoder = encoder;
         this.policies = policies;
+        this.permissions = permissions;
         this.clock = clock;
         this.dummyHash = encoder.encode("dummy-" + UUID.randomUUID());
     }
@@ -268,9 +271,12 @@ public class AuthService {
                         .orElseThrow(ApiException::noPlantAssignment)
                 : null;
         boolean must = Boolean.TRUE.equals(user.getMustChangePwd()) || policies.passwordExpired(user.getPwdChangedAt());
+        boolean superAdmin = Boolean.TRUE.equals(user.getSuperAdmin());
+        PermissionService.MeAccess access = permissions.accessFor(
+                superAdmin, user.getId(), user.getPersonId(), unrestricted ? plantId : null);
         return new MeResponse(
                 new MeUser(user.getId().toString(), user.getUsername(), user.getStatus(),
-                        Boolean.TRUE.equals(user.getSuperAdmin()), must, version(user)),
+                        superAdmin, must, version(user)),
                 new MePerson(person.getId(), person.getCode(), person.getName()),
                 current == null ? null : new MePlant(current.plantId().toString(), current.code(), current.name()),
                 active.stream()
@@ -278,8 +284,8 @@ public class AuthService {
                                 plant.defaultPlant()))
                         .toList(),
                 current == null ? List.of() : accounts.roleCodes(user.getPersonId(), plantId),
-                List.of(),
-                List.of());
+                access.permissions(),
+                access.menus());
     }
 
     private TokenResponse tokenResponse(SysUser user, UUID plantId, String access, SecurityPolicy policy) {

@@ -23,6 +23,11 @@ public final class ErrorCodes {
     public static final String STALE_VERSION = "STALE_VERSION";
     public static final String STATE_CONFLICT = "STATE_CONFLICT";
     public static final String IN_USE = "IN_USE";
+    public static final String DUPLICATE_PERM_CODE = "DUPLICATE_PERM_CODE";
+    public static final String MENU_HAS_CHILDREN = "MENU_HAS_CHILDREN";
+    public static final String MENU_IN_USE = "MENU_IN_USE";
+    public static final String MENU_PARENT_INVALID = "MENU_PARENT_INVALID";
+    public static final String BUILTIN_PROTECTED = "BUILTIN_PROTECTED";
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
     public static final String CROSS_PLANT_REFERENCE = "CROSS_PLANT_REFERENCE";
     public static final String LAYOUT_INVALID = "LAYOUT_INVALID";

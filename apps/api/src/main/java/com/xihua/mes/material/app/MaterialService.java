@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.xihua.mes.auth.CurrentContext;
+import com.xihua.mes.auth.PermissionService;
 import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
@@ -55,13 +56,15 @@ public class MaterialService implements MaterialQuery {
     private final MaterialPlantExtMapper extMapper;
     private final UomService uoms;
     private final ConfigQuery config;
+    private final PermissionService permissions;
 
     public MaterialService(MaterialMapper mapper, MaterialPlantExtMapper extMapper, UomService uoms,
-            ConfigQuery config) {
+            ConfigQuery config, PermissionService permissions) {
         this.mapper = mapper;
         this.extMapper = extMapper;
         this.uoms = uoms;
         this.config = config;
+        this.permissions = permissions;
     }
 
     public PageResult<MaterialView> list(PageQuery page, String q, String status, String materialType,
@@ -114,6 +117,7 @@ public class MaterialService implements MaterialQuery {
     @Transactional
     public MaterialView create(MaterialCreate req) {
         Scope scope = Scope.parseRequired(req.scope());
+        permissions.requireSharedMaster(scope.plantIdForCreate());
         Errors errors = new Errors();
         // V1 slice 1: no code-rule generation yet, so code is required.
         String code = errors.text("code", req.code(), true, 64);
@@ -147,6 +151,7 @@ public class MaterialService implements MaterialQuery {
     @Transactional
     public MaterialView update(UUID id, MaterialUpdate req) {
         Material m = load(id);
+        permissions.requireSharedMaster(m.getPlantId());
         Locks.check(req.lockVersion(), m.getLockVersion());
         requireStatus(m, VersionStatus.DRAFT, "只有草稿物料可修改");
         Errors errors = new Errors();
@@ -176,6 +181,7 @@ public class MaterialService implements MaterialQuery {
     @Transactional
     public void delete(UUID id, Integer lockVersion) {
         Material m = load(id);
+        permissions.requireSharedMaster(m.getPlantId());
         Locks.check(lockVersion, m.getLockVersion());
         requireStatus(m, VersionStatus.DRAFT, "只有草稿物料可删除");
         if (mapper.inUse(id)) {
@@ -189,6 +195,7 @@ public class MaterialService implements MaterialQuery {
     @Transactional
     public MaterialView release(UUID id, Integer lockVersion) {
         Material m = load(id);
+        permissions.requireSharedMaster(m.getPlantId());
         if (VersionStatus.RELEASED.name().equals(m.getStatus())) {
             return get(id);
         }
@@ -205,6 +212,7 @@ public class MaterialService implements MaterialQuery {
     @Transactional
     public MaterialView obsolete(UUID id, Integer lockVersion) {
         Material m = load(id);
+        permissions.requireSharedMaster(m.getPlantId());
         if (VersionStatus.OBSOLETE.name().equals(m.getStatus())) {
             return get(id);
         }

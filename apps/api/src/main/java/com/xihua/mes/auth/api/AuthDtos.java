@@ -53,6 +53,20 @@ public final class AuthDtos {
             @JsonProperty("isDefault") boolean defaultPlant) {
     }
 
+    public record MeMenu(
+            String id,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String parentId,
+            String type,
+            String name,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String permCode,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String path,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String component,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String icon,
+            int sortNo,
+            boolean visible,
+            List<MeMenu> children) {
+    }
+
     public record MeResponse(
             MeUser user,
             @JsonInclude(JsonInclude.Include.NON_NULL) MePerson person,
@@ -60,6 +74,6 @@ public final class AuthDtos {
             List<PlantOption> plants,
             List<String> roles,
             List<String> permissions,
-            List<Object> menus) {
+            List<MeMenu> menus) {
     }
 }

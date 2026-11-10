@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.auth.UserService;
 import com.xihua.mes.auth.api.UserDtos.LockBody;
 import com.xihua.mes.auth.api.UserDtos.PasswordReset;
@@ -42,6 +43,7 @@ public class UserController {
     }
 
     @GetMapping
+    @RequiresPerm("sys:user:list")
     public PageResult<UserSummary> list(HttpServletRequest request,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String status) {
@@ -49,48 +51,57 @@ public class UserController {
     }
 
     @PostMapping
+    @RequiresPerm("sys:user:create")
     public ResponseEntity<UserDetail> create(@RequestBody(required = false) UserCreate req) {
         UserDetail created = users.create(req);
         return ResponseEntity.created(URI.create("/api/v1/users/" + created.id())).body(created);
     }
 
     @GetMapping("/{id}")
+    @RequiresPerm("sys:user:view")
     public UserDetail get(@PathVariable UUID id) {
         return users.get(id);
     }
 
     @PutMapping("/{id}")
+    @RequiresPerm("sys:user:update")
     public UserDetail update(@PathVariable UUID id, @RequestBody(required = false) UserUpdate req) {
         return users.update(id, req);
     }
 
     @DeleteMapping("/{id}")
+    @RequiresPerm("sys:user:delete")
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         users.delete(id, lockVersion);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/enable")
+    @RequiresPerm("sys:user:enable")
     public UserDetail enable(@PathVariable UUID id, @RequestBody(required = false) LockBody req) {
         return users.setStatus(id, lock(req), "ACTIVE");
     }
 
     @PostMapping("/{id}/disable")
+    @RequiresPerm("sys:user:enable")
     public UserDetail disable(@PathVariable UUID id, @RequestBody(required = false) LockBody req) {
         return users.setStatus(id, lock(req), "DISABLED");
     }
 
     @PostMapping("/{id}/unlock")
+    @RequiresPerm("sys:user:update")
     public UserDetail unlock(@PathVariable UUID id, @RequestBody(required = false) LockBody req) {
         return users.unlock(id, lock(req));
     }
 
     @PostMapping("/{id}/reset-password")
+    @RequiresPerm("sys:user:reset-pwd")
     public PasswordReset resetPassword(@PathVariable UUID id, @RequestBody(required = false) ResetPassword req) {
         return users.resetPassword(id, req);
     }
 
     @PutMapping("/{id}/plants")
+    @RequiresPerm("sys:user:grant")
     public UserDetail replacePlants(@PathVariable UUID id, @RequestBody(required = false) PlantReplace req) {
         return users.replacePlants(id, req);
     }

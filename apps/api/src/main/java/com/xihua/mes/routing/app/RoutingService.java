@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.xihua.mes.auth.PermissionService;
 import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
@@ -68,9 +69,11 @@ public class RoutingService {
     private final MaterialQuery materials;
     private final OrgQuery org;
     private final ConfigQuery config;
+    private final PermissionService permissions;
 
     public RoutingService(RoutingMapper mapper, RoutingStepMapper stepMapper, RoutingEdgeMapper edgeMapper,
-            OperationQuery operations, MaterialQuery materials, OrgQuery org, ConfigQuery config) {
+            OperationQuery operations, MaterialQuery materials, OrgQuery org, ConfigQuery config,
+            PermissionService permissions) {
         this.mapper = mapper;
         this.stepMapper = stepMapper;
         this.edgeMapper = edgeMapper;
@@ -78,6 +81,7 @@ public class RoutingService {
         this.materials = materials;
         this.org = org;
         this.config = config;
+        this.permissions = permissions;
     }
 
     public RoutingView get(UUID id) {
@@ -88,6 +92,7 @@ public class RoutingService {
     public RoutingView create(RoutingWrite req) {
         Scope scope = Scope.parseRequired(req.getScope());
         UUID plantId = scope.plantIdForCreate();
+        permissions.requireSharedMaster(plantId);
         Errors errors = new Errors();
         String code = errors.text("code", req.getCode(), true, 64);
         String versionNo = errors.text("versionNo", req.getVersionNo(), true, 16);
@@ -126,6 +131,7 @@ public class RoutingService {
     @Transactional
     public RoutingView update(UUID id, RoutingWrite req) {
         Routing r = load(id);
+        permissions.requireSharedMaster(r.getPlantId());
         Locks.check(req.getLockVersion(), r.getLockVersion());
         if (!VersionStatus.DRAFT.name().equals(r.getStatus())) {
             throw ApiException.stateConflict("只有草稿工艺路线可修改（当前状态 " + r.getStatus() + "）");

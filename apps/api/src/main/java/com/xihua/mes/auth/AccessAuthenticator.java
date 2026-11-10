@@ -80,7 +80,7 @@ public class AccessAuthenticator {
         }
         boolean mustChange = Boolean.TRUE.equals(user.getMustChangePwd())
                 || policies.passwordExpired(user.getPwdChangedAt());
-        if (mustChange && !RequestPaths.changePassword(request)) {
+        if (mustChange && !RequestPaths.allowedDuringPasswordChange(request)) {
             throw ApiException.passwordChangeRequired();
         }
         if (NoPlant.ID.equals(claims.plantId())) {

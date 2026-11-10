@@ -78,7 +78,6 @@ public class UserService {
     }
 
     public PageResult<UserSummary> list(PageQuery page, String q, String status) {
-        guard.check("sys:user:list");
         QueryWrapper<SysUser> qw = new QueryWrapper<>();
         if (status != null && !status.isBlank()) {
             if (!"ACTIVE".equals(status) && !"DISABLED".equals(status)) {
@@ -117,7 +116,6 @@ public class UserService {
     }
 
     public UserDetail get(UUID id) {
-        guard.check("sys:user:list");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         return detail(user, null);
@@ -125,7 +123,6 @@ public class UserService {
 
     @Transactional
     public UserDetail create(UserCreate req) {
-        guard.check("sys:user:create");
         requireBody(req);
         Errors errors = new Errors();
         String code = trim(errors.text("code", req.code(), true, 32));
@@ -185,7 +182,6 @@ public class UserService {
 
     @Transactional
     public UserDetail update(UUID id, UserUpdate req) {
-        guard.check("sys:user:update");
         requireBody(req);
         SysUser user = require(id);
         requireInCurrentPlant(user);
@@ -215,7 +211,6 @@ public class UserService {
 
     @Transactional
     public void delete(UUID id, Integer lockVersion) {
-        guard.check("sys:user:delete");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
@@ -236,7 +231,6 @@ public class UserService {
 
     @Transactional
     public UserDetail setStatus(UUID id, Integer lockVersion, String status) {
-        guard.check("sys:user:enable");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
@@ -261,7 +255,6 @@ public class UserService {
 
     @Transactional
     public UserDetail unlock(UUID id, Integer lockVersion) {
-        guard.check("sys:user:update");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
@@ -275,7 +268,6 @@ public class UserService {
 
     @Transactional
     public PasswordReset resetPassword(UUID id, ResetPassword req) {
-        guard.check("sys:user:reset-pwd");
         requireBody(req);
         SysUser user = require(id);
         requireInCurrentPlant(user);
@@ -299,7 +291,6 @@ public class UserService {
 
     @Transactional
     public UserDetail replacePlants(UUID id, PlantReplace req) {
-        guard.check("sys:user:update");
         requireBody(req);
         SysUser user = require(id);
         requireInCurrentPlant(user);
