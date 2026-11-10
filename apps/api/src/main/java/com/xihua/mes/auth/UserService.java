@@ -219,6 +219,7 @@ public class UserService {
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
+        requireOnlyCurrentPlant(user);
         Locks.check(lockVersion, user.getLockVersion());
         if (id.equals(CurrentContext.userUuid())) {
             throw ApiException.stateConflict("不能删除当前登录账号");
@@ -239,6 +240,9 @@ public class UserService {
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
+        if ("DISABLED".equals(status)) {
+            requireOnlyCurrentPlant(user);
+        }
         Locks.check(lockVersion, user.getLockVersion());
         if ("DISABLED".equals(status) && id.equals(CurrentContext.userUuid())) {
             throw ApiException.stateConflict("不能停用当前登录账号");
@@ -263,6 +267,7 @@ public class UserService {
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
+        requireOnlyCurrentPlant(user);
         Locks.check(lockVersion, user.getLockVersion());
         if (users.unlock(id, user.getLockVersion(), now()) != 1) {
             throw ApiException.staleVersion();
@@ -277,6 +282,10 @@ public class UserService {
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
+        requireOnlyCurrentPlant(user);
+        if (!guard.superAdmin() && req.newPassword() != null && !req.newPassword().isBlank()) {
+            throw ApiException.permissionDenied("sys:user:reset-pwd");
+        }
         Locks.check(req.lockVersion(), user.getLockVersion());
         SecurityPolicy policy = policies.current();
         boolean generated = req.newPassword() == null || req.newPassword().isBlank();
@@ -297,7 +306,7 @@ public class UserService {
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
-        if (id.equals(CurrentContext.userUuid())) {
+        if (!guard.superAdmin() && id.equals(CurrentContext.userUuid())) {
             throw ApiException.permissionDenied("sys:user:grant");
         }
         Locks.check(req.lockVersion(), user.getLockVersion());
@@ -326,6 +335,22 @@ public class UserService {
             throw ApiException.staleVersion();
         }
         return detail(require(id), null);
+    }
+
+    /**
+     * Delete, disable, unlock, and reset are refused when the user still has an active
+     * assignment outside the caller's plant. A super admin is not limited.
+     */
+    private void requireOnlyCurrentPlant(SysUser user) {
+        if (guard.superAdmin()) {
+            return;
+        }
+        UUID current = CurrentContext.requirePlantUuid();
+        boolean elsewhere = accounts.activePlants(user.getPersonId()).stream()
+                .anyMatch(plant -> !current.equals(plant.plantId()));
+        if (elsewhere) {
+            throw ApiException.permissionDenied("sys:user:grant");
+        }
     }
 
     /** Non-super-admins only see users with an active assignment in the current plant. */

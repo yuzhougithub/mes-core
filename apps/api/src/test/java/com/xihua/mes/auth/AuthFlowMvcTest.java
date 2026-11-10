@@ -358,20 +358,38 @@ class AuthFlowMvcTest extends PgIntegrationTest {
 
         String changed = initialPassword + "Z";
         change(blocked, initialPassword, changed).andExpect(status().isNoContent());
-        String token = body(login("admin", changed)).get("accessToken").asString();
+        MvcResult second = login("admin", changed);
+        String token = body(second).get("accessToken").asString();
+        String refresh = refreshValue(second);
         MvcResult me = mvc.perform(bearer(get("/api/v1/auth/me"), token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.superAdmin").value(true))
                 .andReturn();
         JsonNode plant = body(me).get("plant");
         assertThat(plant == null || plant.isNull()).isTrue();
+        String adminId = body(me).get("user").get("id").asString();
         mvc.perform(bearer(get("/api/v1/uoms"), token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NO_PLANT_ASSIGNMENT"));
-        mvc.perform(bearer(post("/api/v1/plants"), token)
+        MvcResult created = mvc.perform(bearer(post("/api/v1/plants"), token)
                         .content("{\"code\":\"" + uniq("P") + "\",\"name\":\"首厂\"}"))
-                .andExpect(status().isCreated());
-        mvc.perform(bearer(get("/api/v1/users"), token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String plantId = body(created).get("id").asString();
+        int lock = body(mvc.perform(bearer(get("/api/v1/users/" + adminId), token))
+                .andExpect(status().isOk()).andReturn()).get("lockVersion").asInt();
+        mvc.perform(bearer(put("/api/v1/users/" + adminId + "/plants"), token)
+                        .content("""
+                                {"lockVersion":%d,"plants":[{"plantId":"%s","isDefault":true}]}
+                                """.formatted(lock, plantId)))
+                .andExpect(status().isOk());
+        MvcResult refreshed = mvc.perform(post("/api/v1/auth/refresh")
+                        .header("X-Requested-With", "XMLHttpRequest")
+                        .cookie(new Cookie(RefreshCookies.NAME, refresh)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.plant.id").value(plantId))
+                .andReturn();
+        mvc.perform(bearer(get("/api/v1/uoms"), body(refreshed).get("accessToken").asString()))
                 .andExpect(status().isOk());
     }
 
@@ -423,6 +441,74 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                                 """.formatted(admin.plantId)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void plantAdminCannotOperateOnUserAssignedElsewhere() throws Exception {
+        Fixture admin = fixture();
+        String plantB = insertPlant();
+        String superToken = body(login(admin.username, initialPassword)).get("accessToken").asString();
+        MvcResult created = mvc.perform(bearer(post("/api/v1/users"), superToken)
+                        .content(userJson(uniq("M"), admin.plantId, true, "Init@Pass1")))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String targetId = body(created).get("id").asString();
+        String personId = body(created).get("person").get("id").asString();
+        jdbc.update("""
+                INSERT INTO org_person_plant (person_id, plant_id, active, is_default)
+                VALUES (?, ?, true, false)
+                """, UUID.fromString(personId), UUID.fromString(plantB));
+
+        UUID actorPerson = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        UUID assignmentId = UUID.randomUUID();
+        String username = "a" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String hash = new BCryptPasswordEncoder(10).encode(initialPassword);
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.update("INSERT INTO org_person (id, code, name) VALUES (?, ?, ?)",
+                    actorPerson, username.toUpperCase(), "厂管");
+            jdbc.update("""
+                    INSERT INTO sys_user
+                        (id, username, person_id, password_hash, status, super_admin, must_change_pwd, default_plant_id)
+                    VALUES (?, ?, ?, ?, 'ACTIVE', false, false, ?)
+                    """, actorId, username, actorPerson, hash, UUID.fromString(admin.plantId));
+            jdbc.update("""
+                    INSERT INTO org_person_plant (id, person_id, plant_id, active, is_default)
+                    VALUES (?, ?, ?, true, true)
+                    """, assignmentId, actorPerson, UUID.fromString(admin.plantId));
+            jdbc.update("""
+                    INSERT INTO org_person_plant_role (person_plant_id, role_id)
+                    SELECT ?, id FROM org_role WHERE code = 'ADMIN'
+                    """, assignmentId);
+        });
+        String token = body(login(username, initialPassword)).get("accessToken").asString();
+        mvc.perform(bearer(post("/api/v1/users/" + targetId + "/reset-password"), token)
+                        .content("{\"lockVersion\":0}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        mvc.perform(bearer(post("/api/v1/users/" + targetId + "/disable"), token)
+                        .content("{\"lockVersion\":0}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/v1/users/" + targetId + "/unlock"), token)
+                        .content("{\"lockVersion\":0}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(delete("/api/v1/users/" + targetId + "?lockVersion=0"), token))
+                .andExpect(status().isForbidden());
+
+        MvcResult local = mvc.perform(bearer(post("/api/v1/users"), superToken)
+                        .content(userJson(uniq("L"), admin.plantId, true, "Init@Pass1")))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String localId = body(local).get("id").asString();
+        mvc.perform(bearer(post("/api/v1/users/" + localId + "/reset-password"), token)
+                        .content("{\"lockVersion\":0,\"newPassword\":\"Other@Pass12\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        mvc.perform(bearer(post("/api/v1/users/" + localId + "/reset-password"), token)
+                        .content("{\"lockVersion\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.password").isNotEmpty())
+                .andExpect(jsonPath("$.mustChangePassword").value(true));
     }
 
     private org.springframework.test.web.servlet.ResultActions change(String token, String oldPassword, String newPassword)

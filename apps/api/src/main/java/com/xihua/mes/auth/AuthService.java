@@ -83,8 +83,10 @@ public class AuthService {
         SecurityPolicy policy = policies.current();
         String normalized = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
         SysUser user = normalized.isEmpty() ? null : users.findByUsername(normalized);
+        // '!' is not a BCrypt hash and would return immediately. Compare a dummy hash instead.
+        boolean unusable = user != null && AdminBootstrap.UNUSABLE_HASH.equals(user.getPasswordHash());
         boolean matches = encoder.matches(password == null ? "" : password,
-                user == null ? dummyHash : user.getPasswordHash());
+                user == null || unusable ? dummyHash : user.getPasswordHash());
         if (user == null) {
             log.info("login result=BAD_CREDENTIALS username={}", normalized);
             throw ApiException.badCredentials();
