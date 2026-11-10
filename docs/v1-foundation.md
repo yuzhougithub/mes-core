@@ -59,11 +59,11 @@
 
 ### 3.2 账号与工厂绑定
 
-账号和人员分开：人员是业务身份（报工、班组），账号是能登录的人员。一个人员最多一个账号【假设 F2】。
+人员与账号**严格一对一**（F2 已确认）：每个人员都有且只有一个账号，扫码报工的工人也不例外。新建人员与新建账号在同一事务内完成（`POST /users` 同时写 `org_person` 与 `sys_user`）；不单独新建人员，也不单独删除账号。主数据里已有的 `POST /persons` 并入 `POST /users`（F1 实现时下线或改为同义接口），`DELETE /persons/{id}` 同时逻辑删除账号。停用账号即停用人员登录，人员仍可在历史记录中被引用。
 
 | 表 | 关键列 | 说明 |
 | --- | --- | --- |
-| `sys_user` | `username`（唯一，小写），`person_id`（唯一，非空），`password_hash`（BCrypt），`status`（`ACTIVE`/`DISABLED`），`super_admin`，`must_change_pwd`，`pwd_changed_at`，`fail_count`，`locked_until`，`default_plant_id`，`last_login_at`，`last_login_ip` | 用户 = 账号 |
+| `sys_user` | `username`（唯一，小写），`person_id`（唯一，非空，外键），`password_hash`（BCrypt），`status`（`ACTIVE`/`DISABLED`），`super_admin`，`must_change_pwd`，`pwd_changed_at`，`fail_count`，`locked_until`，`default_plant_id`，`last_login_at`，`last_login_ip` | 用户 = 账号；迁移时为 `org_person` 现有每条记录补建账号（`username` = 工号小写，`must_change_pwd = true`，随机初始密码由管理员重置后下发） |
 | `org_person_plant` | 已有；加 `is_default`（每人至多一条 true，部分唯一索引） | 用户-工厂多对多即人员任职，不另建表 |
 | `auth_refresh_token` | `user_id`，`token_hash`（SHA-256），`family_id`，`expires_at`，`revoked_at`，`ip`，`user_agent` | 用一次换一次；旧令牌被重放时整个 `family_id` 作废 |
 
@@ -73,11 +73,21 @@
 
 | 表 | 关键列 | 说明 |
 | --- | --- | --- |
-| `sys_menu` | `parent_id`，`type`（`DIR`/`MENU`/`BUTTON`），`name`，`perm_code`，`path`，`component`，`icon`，`sort_no`，`visible`，`enabled` | `MENU` 对应前端路由；`BUTTON` 只承载 `perm_code`。菜单由迁移种子维护，页面上只允许改名称、图标、排序、显隐【假设 F3】 |
+| `sys_menu` | `parent_id`，`type`（`DIR`/`MENU`/`BUTTON`），`name`，`perm_code`，`path`，`component`，`icon`，`sort_no`，`visible`，`enabled` | `MENU` 对应前端路由；`BUTTON` 只承载 `perm_code`。页面可增删改三种类型（F3 已确认），迁移种子仅作初始数据。约束见下 |
 | `org_role` | 已有；加 `data_scope`（见 §4.2），`enabled`，`sort_no`，`builtin` | `builtin` 角色不可删 |
 | `sys_role_menu` | `role_id`，`menu_id` | 功能权限 |
 | `sys_role_data_dept` | `role_id`，`dept_id` | `data_scope = CUSTOM` 时的部门集合 |
 | `org_person_plant_role` | 已有 | 角色按工厂授予：同一人在不同工厂可有不同角色 |
+
+菜单约束：
+
+- 层级：`DIR` 的父节点只能是根或 `DIR`；`MENU` 的父节点只能是 `DIR` 或根；`BUTTON` 的父节点必须是 `MENU`，且不能有子节点。违反 → 422 `MENU_PARENT_INVALID`。
+- `perm_code`：全局唯一（部分唯一索引 `WHERE perm_code IS NOT NULL AND NOT deleted`），重复 → 409 `DUPLICATE_PERM_CODE`。`BUTTON` 必填；`MENU` 选填（填了表示进入页面需要该权限点）；`DIR` 不填。格式 `^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*){1,3}$`，否则 422。
+- `MENU` 必填 `path`（同级唯一）与 `component`（前端已注册的页面键，未注册的前端显示“页面不存在”，后端不校验）。
+- 删除：有子节点 → 409 `MENU_HAS_CHILDREN`；被 `sys_role_menu` 引用 → 409 `MENU_IN_USE`（返回引用角色编码），需先在角色里取消授权。逻辑删除。
+- 移动：不能移到自身或子孙下（422 `MENU_PARENT_INVALID`），同样受层级规则约束。
+- 改 `perm_code` 或删除后，持有相关角色的用户权限版本 `ver` 加一。
+- 后端代码里 `@RequiresPerm` 用到但库中不存在的 `perm_code`，启动时告警（不失败），便于发现菜单被误删。
 
 权限点编码 `模块:资源:动作`，全小写，例 `md:material:list`、`md:material:create`、`md:material:update`、`md:material:delete`、`md:material:release`、`md:material:import`、`md:material:export`、`sys:user:reset-pwd`。动作集合固定为 `list / view / create / update / delete / enable / release / obsolete / import / export`，特殊动作单列。种子角色：`ADMIN`（全部权限点，数据范围 `PLANT`）、`EDITOR`、`VIEWER`，与原三档语义一致。`super_admin = true` 的用户跳过功能和数据权限，种子一个 `admin`，`must_change_pwd = true`。
 
@@ -153,7 +163,7 @@
 | 组织树 | `GET /org/tree`（集团 → 工厂 → 车间 → 产线） | 登录 |
 | 部门 | `GET /depts/tree`、`POST /depts`、`PUT/DELETE /depts/{id}`、`POST /depts/{id}/move` | `org:dept:*` |
 | 岗位 | `GET/POST /posts`、`PUT/DELETE /posts/{id}` | `org:post:*` |
-| 菜单 | `GET /menus/tree`、`PUT /menus/{id}`（仅名称 / 图标 / 排序 / 显隐） | `sys:menu:*` |
+| 菜单 | `GET /menus/tree`、`GET /menus/{id}`、`POST /menus`、`PUT /menus/{id}`（含改父节点）、`DELETE /menus/{id}?lockVersion=` | `sys:menu:list/create/update/delete` |
 | 角色 | `GET/POST /roles`、`PUT/DELETE /roles/{id}`、`GET/PUT /roles/{id}/menus`、`PUT /roles/{id}/data-scope`（`dataScope` + `deptIds`）、`GET /roles/{id}/users` | `sys:role:*`、`sys:role:grant` |
 | 字典 | 已有 `/dict-types`、`/dict-items`；新增 `GET /dicts/{typeCode}`（前端缓存用，带 `ETag`） | 已有 / 登录 |
 | 系统参数 | `GET /configs`、`PUT /configs/{key}`；`GET /configs/public`（前端可读子集） | `sys:config:*` / 匿名 |
@@ -162,7 +172,7 @@
 | 登录日志 | `GET /login-logs` | `sys:login-log:list` |
 | 操作日志 | `GET /oper-logs`、`GET /oper-logs/{id}` | `sys:oper-log:list` |
 
-新错误码：401 `UNAUTHENTICATED`、`TOKEN_EXPIRED`、`TOKEN_INVALID`；403 `PERMISSION_DENIED`、`ACCOUNT_LOCKED`、`ACCOUNT_DISABLED`、`PASSWORD_CHANGE_REQUIRED`（只放行改密和登出）、`NO_PLANT_ASSIGNMENT`；400 `PLANT_MISMATCH`；422 `PASSWORD_POLICY`、`DEPT_NOT_EMPTY`、`BUILTIN_PROTECTED`。登录失败统一返回 401 `BAD_CREDENTIALS`，不区分“用户不存在”和“密码错”。
+新错误码：401 `UNAUTHENTICATED`、`TOKEN_EXPIRED`、`TOKEN_INVALID`；403 `PERMISSION_DENIED`、`ACCOUNT_LOCKED`、`ACCOUNT_DISABLED`、`PASSWORD_CHANGE_REQUIRED`（只放行改密和登出）、`NO_PLANT_ASSIGNMENT`；400 `PLANT_MISMATCH`；422 `PASSWORD_POLICY`、`DEPT_NOT_EMPTY`、`BUILTIN_PROTECTED`、`MENU_PARENT_INVALID`；409 `DUPLICATE_PERM_CODE`、`MENU_HAS_CHILDREN`、`MENU_IN_USE`。登录失败统一返回 401 `BAD_CREDENTIALS`，不区分“用户不存在”和“密码错”。
 
 ## 6. 前端
 
@@ -177,8 +187,8 @@
 | 编号 | 假设 |
 | --- | --- |
 | F1 | 组织树不建统一节点表；产线 = 类型为 `LINE` 的工作中心 |
-| F2 | 账号与人员一对一，人员可无账号 |
-| F3 | 菜单由迁移种子维护，页面不能新增菜单 |
+| F2 | 已确认：人员与账号严格一对一，每个人员都有账号 |
+| F3 | 已确认：菜单可在页面增删改，种子仅作初始数据 |
 | F4 | 两张日志表按月分区，操作日志保留 180 天 |
 | F5 | 写接口漏标 `@RequiresPerm` 时启动失败 |
 | F6 | 敏感字段明文需要单独权限点 |
