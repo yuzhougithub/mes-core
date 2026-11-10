@@ -167,7 +167,7 @@ RFC 9457 Problem Details（Spring `ProblemDetail`），`Content-Type: applicatio
 
 `POST /routings/{id}/copy` 将源版本的 `layout_json` **一并复制**到新草稿（V1 保持 `stepNo`，坐标键可直拷）。
 
-`edges[]` 的 `edgeType`：`REWORK` / `RETURN` 入库；`MAIN` **忽略**（不入库、不视为错误，整单仍 200）；其它值 → 422 `VALIDATION_FAILED`（`errors[].field` 如 `edges[0].edgeType`）。前端可不传 `MAIN`，传了也不必先剥离。
+`edges[]` 的 `edgeType`：`REWORK` / `RETURN` 入库；`MAIN` **忽略**（不入库、不视为错误，整单仍 200）；其它值 → 422 `VALIDATION_FAILED`（`errors[].field` 如 `edges[0].edgeType`）。取值大小写敏感：`main`、`Rework` 等视为未知值，422。前端可不传 `MAIN`，传了也不必先剥离。
 
 ### resource
 
