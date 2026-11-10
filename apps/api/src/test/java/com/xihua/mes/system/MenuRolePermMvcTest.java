@@ -4,17 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +57,7 @@ class MenuRolePermMvcTest extends PgIntegrationTest {
     private static final String UOM_CREATE = "00000000-0000-4000-8000-00000000f222";
     private static final String USER_GRANT = "00000000-0000-4000-8000-00000000f267";
     private static final String ROLE_GRANT = "00000000-0000-4000-8000-00000000f275";
+    private static final String PLANT_CREATE = "00000000-0000-4000-8000-00000000f252";
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -59,6 +67,9 @@ class MenuRolePermMvcTest extends PgIntegrationTest {
 
     @Autowired
     private ObjectProvider<RequestMappingHandlerMapping> mappings;
+
+    @Autowired
+    private WriteEndpointGuard writeGuard;
 
     @Value("${mes.auth.admin.initial-password}")
     private String initialPassword;
@@ -407,6 +418,120 @@ class MenuRolePermMvcTest extends PgIntegrationTest {
     }
 
     @Test
+    void adminSeedOmitsGlobalWritePerms() {
+        Set<String> global = writeGuard.globalPermCodes();
+        assertThat(global).contains(
+                "org:plant:create", "org:plant:update", "org:plant:delete",
+                "sys:menu:create", "sys:menu:update", "sys:menu:delete",
+                "sys:role:create", "sys:role:update", "sys:role:delete",
+                "sys:role:grant");
+        List<String> held = jdbc.queryForList("""
+                SELECT m.perm_code
+                  FROM sys_role_menu rm
+                  JOIN org_role r ON r.id = rm.role_id
+                  JOIN sys_menu m ON m.id = rm.menu_id
+                 WHERE r.code = 'ADMIN' AND NOT r.deleted
+                   AND m.perm_code IS NOT NULL
+                """, String.class);
+        assertThat(held).doesNotContainAnyElementsOf(global);
+        assertThat(held).contains(
+                "org:plant:list", "org:plant:view",
+                "sys:menu:list", "sys:menu:view",
+                "sys:role:list", "sys:role:view",
+                "sys:user:create", "md:material:create");
+    }
+
+    @Test
+    void meHidesGlobalPermCodesFromNonSuperadmins() throws Exception {
+        Set<String> global = writeGuard.globalPermCodes();
+        Account admin = account(null, false, "ADMIN");
+        JsonNode me = body(mvc.perform(bearer(get("/api/v1/auth/me"), token(admin)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(texts(me.get("permissions")))
+                .doesNotContainAnyElementsOf(global)
+                .contains("org:plant:list", "sys:user:create", "sys:role:view", "md:material:create");
+        assertThat(permCodes(me.get("menus"))).doesNotContainAnyElementsOf(global);
+
+        mvc.perform(bearer(get("/api/v1/plants"), token(admin)))
+                .andExpect(status().isOk());
+        mvc.perform(bearer(get("/api/v1/menus/tree"), token(admin)))
+                .andExpect(status().isOk());
+        mvc.perform(bearer(get("/api/v1/roles"), token(admin)))
+                .andExpect(status().isOk());
+
+        JsonNode superMe = body(mvc.perform(bearer(get("/api/v1/auth/me"), token(account(admin.plantId(), true))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(texts(superMe.get("permissions"))).containsAll(global);
+        assertThat(permCodes(superMe.get("menus"))).containsAll(global);
+    }
+
+    @Test
+    void meHidesGlobalPermCodesEvenWhenTheRoleHoldsThem() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String roleId = createRole(adminToken, "GLOBAL_HOLD");
+        mvc.perform(bearer(put("/api/v1/roles/" + roleId + "/menus"), adminToken)
+                        .content("{\"menuIds\":[\"" + PLANT_CREATE + "\",\"" + UOM_MENU + "\"]}"))
+                .andExpect(status().isOk());
+        Account holder = account(admin.plantId(), false, roleId);
+        JsonNode me = body(mvc.perform(bearer(get("/api/v1/auth/me"), token(holder)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(texts(me.get("permissions")))
+                .contains("md:uom:list")
+                .doesNotContain("org:plant:create")
+                .doesNotContainAnyElementsOf(writeGuard.globalPermCodes());
+        assertThat(permCodes(me.get("menus")))
+                .contains("md:uom:list")
+                .doesNotContain("org:plant:create");
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("globalResourceWrites")
+    void plantAdminIsForbiddenOnGlobalResourceWrites(String method, String pattern) throws Exception {
+        Account admin = account(null, false, "ADMIN");
+        String path = pattern.replaceAll("\\{[^}/]+}", UUID.randomUUID().toString());
+        MockHttpServletRequestBuilder request = switch (method) {
+            case "POST" -> post(path).content("{}");
+            case "PUT" -> put(path).content("{}");
+            case "PATCH" -> patch(path).content("{}");
+            case "DELETE" -> delete(path);
+            default -> throw new IllegalArgumentException(method);
+        };
+        mvc.perform(bearer(request, token(admin)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void globalResourceWriteCasesCoverEveryEndpoint() {
+        Map<RequestMappingInfo, HandlerMethod> all = new LinkedHashMap<>();
+        mappings.orderedStream().forEach(mapping -> all.putAll(mapping.getHandlerMethods()));
+        List<String> discovered = WriteEndpointGuard.globalResourceWrites(all);
+        List<String> cases = globalResourceWrites()
+                .map(args -> args.get()[0] + " " + args.get()[1])
+                .toList();
+        assertThat(discovered).isNotEmpty();
+        assertThat(cases).containsExactlyInAnyOrderElementsOf(discovered);
+    }
+
+    static Stream<Arguments> globalResourceWrites() {
+        return Stream.of(
+                Arguments.of("POST", "/api/v1/plants"),
+                Arguments.of("PUT", "/api/v1/plants/{id}"),
+                Arguments.of("DELETE", "/api/v1/plants/{id}"),
+                Arguments.of("POST", "/api/v1/menus"),
+                Arguments.of("PUT", "/api/v1/menus/{id}"),
+                Arguments.of("DELETE", "/api/v1/menus/{id}"),
+                Arguments.of("POST", "/api/v1/roles"),
+                Arguments.of("PUT", "/api/v1/roles/{id}"),
+                Arguments.of("DELETE", "/api/v1/roles/{id}"),
+                Arguments.of("PUT", "/api/v1/roles/{id}/menus"));
+    }
+
+    @Test
     void menuCycleIsRejectedByTheDatabase() {
         UUID left = UUID.randomUUID();
         UUID right = UUID.randomUUID();
@@ -417,6 +542,26 @@ class MenuRolePermMvcTest extends PgIntegrationTest {
                             right, left, "环B");
                     jdbc.update("UPDATE sys_menu SET parent_id = ? WHERE id = ?", right, left);
                 }));
+    }
+
+    private static List<String> texts(JsonNode array) {
+        List<String> values = new ArrayList<>();
+        array.forEach(node -> values.add(node.asString()));
+        return values;
+    }
+
+    private static List<String> permCodes(JsonNode menus) {
+        List<String> codes = new ArrayList<>();
+        if (menus == null || !menus.isArray()) {
+            return codes;
+        }
+        for (JsonNode node : menus) {
+            if (node.hasNonNull("permCode")) {
+                codes.add(node.get("permCode").asString());
+            }
+            codes.addAll(permCodes(node.get("children")));
+        }
+        return codes;
     }
 
     private String createRole(String token, String code) throws Exception {

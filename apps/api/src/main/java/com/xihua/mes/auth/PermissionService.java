@@ -36,6 +36,7 @@ import com.xihua.mes.common.error.ApiException;
 public class PermissionService implements PermVersions {
 
     private final PermissionMapper mapper;
+    private final WriteEndpointGuard writes;
     private final Clock clock;
     private final boolean headerMode;
     private final Cache<CacheKey, Snapshot> cache = Caffeine.newBuilder()
@@ -45,9 +46,11 @@ public class PermissionService implements PermVersions {
 
     public PermissionService(
             PermissionMapper mapper,
+            WriteEndpointGuard writes,
             Clock clock,
             @Value("${mes.auth.mode:jwt}") String mode) {
         this.mapper = mapper;
+        this.writes = writes;
         this.clock = clock;
         this.headerMode = PlantContextFilter.MODE_HEADER.equalsIgnoreCase(mode == null ? "" : mode.trim());
     }
@@ -199,7 +202,61 @@ public class PermissionService implements PermVersions {
         UserPermState state = mapper.userState(userId);
         int version = state == null ? 0 : version(state);
         Snapshot snapshot = snapshot(userId, personId, plantId, version);
-        return new MeAccess(sorted(snapshot.perms()), tree(mapper.menus(), snapshot.perms(), false));
+        Set<String> visible = withoutGlobal(snapshot.perms());
+        return new MeAccess(sorted(visible), stripGlobal(tree(mapper.menus(), visible, false)));
+    }
+
+    /**
+     * {@code GET /auth/me} must not advertise global write codes to a plant role.
+     * Authorization of {@link RequiresPerm#global()} endpoints does not consult this set.
+     */
+    private Set<String> withoutGlobal(Set<String> perms) {
+        Set<String> hidden = writes.globalPermCodes();
+        if (hidden.isEmpty() || perms.isEmpty()) {
+            return perms;
+        }
+        Set<String> kept = new HashSet<>();
+        for (String code : perms) {
+            if (!hidden.contains(code)) {
+                kept.add(code);
+            }
+        }
+        return Set.copyOf(kept);
+    }
+
+    private List<MeMenu> stripGlobal(List<MeMenu> menus) {
+        Set<String> hidden = writes.globalPermCodes();
+        if (hidden.isEmpty()) {
+            return menus;
+        }
+        return stripGlobal(menus, hidden);
+    }
+
+    private static List<MeMenu> stripGlobal(List<MeMenu> menus, Set<String> hidden) {
+        if (menus == null || menus.isEmpty()) {
+            return List.of();
+        }
+        List<MeMenu> kept = new ArrayList<>();
+        for (MeMenu menu : menus) {
+            List<MeMenu> children = stripGlobal(menu.children(), hidden);
+            boolean hideCode = menu.permCode() != null && hidden.contains(menu.permCode());
+            if (hideCode && children.isEmpty()) {
+                continue;
+            }
+            kept.add(new MeMenu(
+                    menu.id(),
+                    menu.parentId(),
+                    menu.type(),
+                    menu.name(),
+                    hideCode ? null : menu.permCode(),
+                    menu.path(),
+                    menu.component(),
+                    menu.icon(),
+                    menu.sortNo(),
+                    menu.visible(),
+                    children));
+        }
+        return List.copyOf(kept);
     }
 
     /** Header mode is the dev stand-in for a caller who holds every permission point. */
