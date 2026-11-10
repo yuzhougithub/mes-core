@@ -20,6 +20,8 @@ import com.xihua.mes.auth.AuthService.IssuedSession;
 import com.xihua.mes.auth.ClientInfo;
 import com.xihua.mes.auth.CsrfGuard;
 import com.xihua.mes.auth.CurrentContext;
+import com.xihua.mes.auth.PermissionService;
+import com.xihua.mes.auth.PermissionService.MeAccess;
 import com.xihua.mes.auth.PlantContextFilter;
 import com.xihua.mes.auth.RefreshCookies;
 import com.xihua.mes.auth.api.AuthDtos.ChangePassword;
@@ -38,10 +40,13 @@ import com.xihua.mes.common.error.ErrorCodes;
 public class AuthController {
 
     private final AuthService auth;
+    private final PermissionService permissions;
     private final boolean headerMode;
 
-    public AuthController(AuthService auth, @Value("${mes.auth.mode:jwt}") String mode) {
+    public AuthController(AuthService auth, PermissionService permissions,
+            @Value("${mes.auth.mode:jwt}") String mode) {
         this.auth = auth;
+        this.permissions = permissions;
         this.headerMode = PlantContextFilter.MODE_HEADER.equalsIgnoreCase(mode == null ? "" : mode.trim());
     }
 
@@ -97,15 +102,16 @@ public class AuthController {
         return auth.me(CurrentContext.userUuid(), CurrentContext.requirePlantUuid());
     }
 
-    private static MeResponse headerMe(HttpServletRequest request) {
+    private MeResponse headerMe(HttpServletRequest request) {
         String user = blankToNull(request.getHeader(PlantContextFilter.HEADER_USER_ID));
         String plant = blankToNull(request.getHeader(PlantContextFilter.HEADER_PLANT_ID));
         MePlant mePlant = plant == null ? null : new MePlant(plant, null, null);
         List<PlantOption> plants = mePlant == null
                 ? List.of()
                 : List.of(new PlantOption(mePlant.id(), null, null, true));
+        MeAccess access = permissions.headerAccess();
         return new MeResponse(new MeUser(user, null, null, null, null, null), null, mePlant, plants,
-                List.of("ADMIN"), List.of(), List.of());
+                List.of("ADMIN"), access.permissions(), access.menus());
     }
 
     private static void writeRefresh(HttpServletResponse response, IssuedSession session) {

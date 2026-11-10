@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
 import com.xihua.mes.material.api.UomDtos.UomCreate;
@@ -34,28 +35,33 @@ public class UomController {
     }
 
     @GetMapping
+    @RequiresPerm("md:uom:list")
     public PageResult<UomView> list(HttpServletRequest request, @RequestParam(required = false) String q,
             @RequestParam(required = false) Boolean enabled) {
         return service.list(PageQuery.from(request), q, enabled);
     }
 
     @PostMapping
+    @RequiresPerm("md:uom:create")
     public ResponseEntity<UomView> create(@RequestBody UomCreate req) {
         UomView view = service.create(req);
         return ResponseEntity.created(URI.create("/api/v1/uoms/" + view.id())).body(view);
     }
 
     @GetMapping("/{id}")
+    @RequiresPerm("md:uom:view")
     public UomView get(@PathVariable UUID id) {
         return service.get(id);
     }
 
     @PutMapping("/{id}")
+    @RequiresPerm("md:uom:update")
     public UomView update(@PathVariable UUID id, @RequestBody UomUpdate req) {
         return service.update(id, req);
     }
 
     @DeleteMapping("/{id}")
+    @RequiresPerm("md:uom:delete")
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         service.delete(id, lockVersion);
         return ResponseEntity.noContent().build();

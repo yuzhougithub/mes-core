@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.config.api.CustomFieldSchemaDtos.SchemaPut;
 import com.xihua.mes.config.api.CustomFieldSchemaDtos.SchemaView;
 import com.xihua.mes.config.app.CustomFieldSchemaService;
@@ -23,11 +24,13 @@ public class CustomFieldSchemaController {
     }
 
     @GetMapping("/{entityType}")
+    @RequiresPerm("cfg:field-schema:view")
     public SchemaView get(@PathVariable String entityType) {
         return service.get(CustomFieldSchemaService.parseEntityType(entityType));
     }
 
     @PutMapping("/{entityType}")
+    @RequiresPerm("cfg:field-schema:update")
     public SchemaView put(@PathVariable String entityType, @RequestBody SchemaPut body) {
         return service.put(CustomFieldSchemaService.parseEntityType(entityType), body.schema(), body.lockVersion());
     }

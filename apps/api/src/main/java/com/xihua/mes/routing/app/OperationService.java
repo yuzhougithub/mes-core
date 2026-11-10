@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.xihua.mes.auth.PermissionService;
 import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
@@ -29,10 +30,12 @@ public class OperationService implements OperationQuery {
 
     private final OperationMapper mapper;
     private final ConfigQuery config;
+    private final PermissionService permissions;
 
-    public OperationService(OperationMapper mapper, ConfigQuery config) {
+    public OperationService(OperationMapper mapper, ConfigQuery config, PermissionService permissions) {
         this.mapper = mapper;
         this.config = config;
+        this.permissions = permissions;
     }
 
     public PageResult<OperationView> list(PageQuery page, String q) {
@@ -65,6 +68,7 @@ public class OperationService implements OperationQuery {
     @Transactional
     public OperationView create(OperationCreate req) {
         Scope scope = Scope.parseRequired(req.scope());
+        permissions.requireSharedMaster(scope.plantIdForCreate());
         Errors errors = new Errors();
         String code = errors.text("code", req.code(), true, 32);
         String name = errors.text("name", req.name(), true, 128);

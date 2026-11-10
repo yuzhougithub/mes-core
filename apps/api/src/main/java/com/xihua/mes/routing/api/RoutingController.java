@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.routing.api.RoutingDtos.RoutingView;
 import com.xihua.mes.routing.api.RoutingDtos.RoutingWrite;
 import com.xihua.mes.routing.app.RoutingService;
@@ -28,17 +29,20 @@ public class RoutingController {
     }
 
     @PostMapping
+    @RequiresPerm("rtg:routing:create")
     public ResponseEntity<RoutingView> create(@RequestBody RoutingWrite req) {
         RoutingView view = service.create(req);
         return ResponseEntity.created(URI.create("/api/v1/routings/" + view.id())).body(view);
     }
 
     @GetMapping("/{id}")
+    @RequiresPerm("rtg:routing:view")
     public RoutingView get(@PathVariable UUID id) {
         return service.get(id);
     }
 
     @PutMapping("/{id}")
+    @RequiresPerm("rtg:routing:update")
     public RoutingView update(@PathVariable UUID id, @RequestBody RoutingWrite req) {
         return service.update(id, req);
     }

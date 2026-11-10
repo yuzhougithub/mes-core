@@ -85,8 +85,9 @@
 - `perm_code`：全局唯一（部分唯一索引 `WHERE perm_code IS NOT NULL AND NOT deleted`），重复 → 409 `DUPLICATE_PERM_CODE`。`BUTTON` 必填；`MENU` 选填（填了表示进入页面需要该权限点）；`DIR` 不填。格式 `^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*){1,3}$`，否则 422。
 - `MENU` 必填 `path`（同级唯一）与 `component`（前端已注册的页面键，未注册的前端显示“页面不存在”，后端不校验）。
 - 删除：有子节点 → 409 `MENU_HAS_CHILDREN`；被 `sys_role_menu` 引用 → 409 `MENU_IN_USE`（返回引用角色编码），需先在角色里取消授权。逻辑删除。
-- 移动：不能移到自身或子孙下（422 `MENU_PARENT_INVALID`），同样受层级规则约束。
-- 改 `perm_code` 或删除后，持有相关角色的用户权限版本 `ver` 加一。
+- 移动：不能移到自身或子孙下（422 `MENU_PARENT_INVALID`），同样受层级规则约束。菜单的创建、修改、删除在事务开头取 `pg_advisory_xact_lock(hashtext('sys_menu_tree'))`，然后再读祖先链。库内另有 DEFERRABLE 约束触发器，用递归 CTE 拒绝成环。
+- 祖先链上任一节点 `enabled = false` 或已删除时，子孙按钮的 `perm_code` 不进入权限快照，调用即 403。
+- 改 `perm_code` 或删除后，持有相关角色的用户权限版本 `ver` 加一。停用父节点时，持有其子孙菜单的用户同样 `ver` 加一。
 - 后端代码里 `@RequiresPerm` 用到但库中不存在的 `perm_code`，启动时告警（不失败），便于发现菜单被误删。
 
 权限点编码 `模块:资源:动作`，全小写，例 `md:material:list`、`md:material:create`、`md:material:update`、`md:material:delete`、`md:material:release`、`md:material:import`、`md:material:export`、`sys:user:reset-pwd`。动作集合固定为 `list / view / create / update / delete / enable / release / obsolete / import / export`，特殊动作单列。种子角色：`ADMIN`（全部权限点，数据范围 `PLANT`）、`EDITOR`、`VIEWER`，与原三档语义一致。`super_admin = true` 的用户跳过功能和数据权限，种子一个 `admin`，`must_change_pwd = true`。
@@ -121,6 +122,7 @@
 ### 4.2 功能权限
 
 - 后端：Controller 方法标 `@RequiresPerm("md:material:update")`（可多个，`anyOf`）。没有该注解且不在白名单（登录、健康检查）的接口启动时报错，防止漏标【假设 F5】。不满足 → 403 `PERMISSION_DENIED`，返回所需权限点编码。
+- **全局资源只允许超级管理员写**（F2）。`@RequiresPerm(global = true)` 的接口，非超级管理员一律 403，即使当前厂角色持有该权限点。已标 `global` 的写操作：工厂的创建 / 修改 / 删除；菜单的创建 / 修改 / 删除；角色定义的创建 / 修改 / 删除（含启用与停用）；`PUT /roles/{id}/menus`。厂级管理员仍可在本厂把**已有**角色授给其他用户（`POST /users`、`PUT /users/{id}/plants`）。此时每个角色的全部权限点必须是操作者在当前厂所持权限点的子集；非超级管理员改角色菜单时，除 `DIR` 外每个所选节点的 `perm_code` 也必须落在自己的权限内。超出 → 403 `PERMISSION_DENIED`。`header` 模式（仅 dev/test）仍视为完全访问，包含这些全局写操作。
 - 前端：登录后取 `GET /auth/me`，拿到菜单树和权限点集合；路由按菜单生成；按钮用 `<Perm code="…">` 包裹，无权限不渲染（不是置灰）。前端只做体验，后端是唯一裁决。
 
 ### 4.3 数据权限
@@ -163,8 +165,8 @@
 | 组织树 | `GET /org/tree`（集团 → 工厂 → 车间 → 产线） | 登录 |
 | 部门 | `GET /depts/tree`、`POST /depts`、`PUT/DELETE /depts/{id}`、`POST /depts/{id}/move` | `org:dept:*` |
 | 岗位 | `GET/POST /posts`、`PUT/DELETE /posts/{id}` | `org:post:*` |
-| 菜单 | `GET /menus/tree`、`GET /menus/{id}`、`POST /menus`、`PUT /menus/{id}`（含改父节点）、`DELETE /menus/{id}?lockVersion=` | `sys:menu:list/create/update/delete` |
-| 角色 | `GET/POST /roles`、`PUT/DELETE /roles/{id}`、`GET/PUT /roles/{id}/menus`、`PUT /roles/{id}/data-scope`（`dataScope` + `deptIds`）、`GET /roles/{id}/users` | `sys:role:*`、`sys:role:grant` |
+| 菜单 | `GET /menus/tree`、`GET /menus/{id}`、`POST /menus`、`PUT /menus/{id}`（含改父节点）、`DELETE /menus/{id}?lockVersion=` | `sys:menu:list/view` 登录角色；`create/update/delete` 为 `global`，仅超级管理员 |
+| 角色 | `GET/POST /roles`、`PUT/DELETE /roles/{id}`、`GET/PUT /roles/{id}/menus`、`PUT /roles/{id}/data-scope`（`dataScope` + `deptIds`）、`GET /roles/{id}/users` | 读 `sys:role:list/view`；角色定义写与 `PUT /menus` 为 `global`，仅超级管理员。厂级管理员可按 §4.2 把已有角色授给本厂用户 |
 | 字典 | 已有 `/dict-types`、`/dict-items`；新增 `GET /dicts/{typeCode}`（前端缓存用，带 `ETag`） | 已有 / 登录 |
 | 系统参数 | `GET /configs`、`PUT /configs/{key}`；`GET /configs/public`（前端可读子集） | `sys:config:*` / 匿名 |
 | 编码规则 | 已有 `/code-rules`；新增 `POST /code-rules/{id}/preview`（不占号） | `sys:code-rule:*` |

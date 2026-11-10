@@ -4,9 +4,11 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -54,6 +56,7 @@ public class UserService {
     private final PersonAccountService accounts;
     private final RefreshTokenMapper refreshTokens;
     private final UserAdminGuard guard;
+    private final PermissionService permissions;
     private final PasswordEncoder encoder;
     private final SecurityPolicyService policies;
     private final Clock clock;
@@ -64,6 +67,7 @@ public class UserService {
             PersonAccountService accounts,
             RefreshTokenMapper refreshTokens,
             UserAdminGuard guard,
+            PermissionService permissions,
             PasswordEncoder encoder,
             SecurityPolicyService policies,
             Clock clock) {
@@ -72,13 +76,13 @@ public class UserService {
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
         this.guard = guard;
+        this.permissions = permissions;
         this.encoder = encoder;
         this.policies = policies;
         this.clock = clock;
     }
 
     public PageResult<UserSummary> list(PageQuery page, String q, String status) {
-        guard.check("sys:user:list");
         QueryWrapper<SysUser> qw = new QueryWrapper<>();
         if (status != null && !status.isBlank()) {
             if (!"ACTIVE".equals(status) && !"DISABLED".equals(status)) {
@@ -117,7 +121,6 @@ public class UserService {
     }
 
     public UserDetail get(UUID id) {
-        guard.check("sys:user:list");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         return detail(user, null);
@@ -125,7 +128,6 @@ public class UserService {
 
     @Transactional
     public UserDetail create(UserCreate req) {
-        guard.check("sys:user:create");
         requireBody(req);
         Errors errors = new Errors();
         String code = trim(errors.text("code", req.code(), true, 32));
@@ -147,6 +149,7 @@ public class UserService {
             throw ApiException.permissionDenied("sys:user:grant");
         }
         List<AssignmentDraft> createPlants = drafts(req.plants());
+        permissions.requireRolesWithinCaller(roleIdsOf(createPlants));
         if (!guard.superAdmin()) {
             UUID current = CurrentContext.requirePlantUuid();
             if (createPlants.size() != 1 || createPlants.get(0).plantId() == null
@@ -185,7 +188,6 @@ public class UserService {
 
     @Transactional
     public UserDetail update(UUID id, UserUpdate req) {
-        guard.check("sys:user:update");
         requireBody(req);
         SysUser user = require(id);
         requireInCurrentPlant(user);
@@ -215,7 +217,6 @@ public class UserService {
 
     @Transactional
     public void delete(UUID id, Integer lockVersion) {
-        guard.check("sys:user:delete");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
@@ -236,7 +237,6 @@ public class UserService {
 
     @Transactional
     public UserDetail setStatus(UUID id, Integer lockVersion, String status) {
-        guard.check("sys:user:enable");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
@@ -261,7 +261,6 @@ public class UserService {
 
     @Transactional
     public UserDetail unlock(UUID id, Integer lockVersion) {
-        guard.check("sys:user:update");
         SysUser user = require(id);
         requireInCurrentPlant(user);
         protectSuper(user);
@@ -275,7 +274,6 @@ public class UserService {
 
     @Transactional
     public PasswordReset resetPassword(UUID id, ResetPassword req) {
-        guard.check("sys:user:reset-pwd");
         requireBody(req);
         SysUser user = require(id);
         requireInCurrentPlant(user);
@@ -299,7 +297,6 @@ public class UserService {
 
     @Transactional
     public UserDetail replacePlants(UUID id, PlantReplace req) {
-        guard.check("sys:user:update");
         requireBody(req);
         SysUser user = require(id);
         requireInCurrentPlant(user);
@@ -309,6 +306,7 @@ public class UserService {
         }
         Locks.check(req.lockVersion(), user.getLockVersion());
         List<AssignmentDraft> submitted = drafts(req.plants());
+        permissions.requireRolesWithinCaller(roleIdsOf(submitted));
         UUID defaultPlant;
         if (guard.superAdmin()) {
             defaultPlant = accounts.replaceAssignments(user.getPersonId(), submitted);
@@ -392,6 +390,21 @@ public class UserService {
             people.put(person.getId(), person);
         }
         return people;
+    }
+
+    private static Set<UUID> roleIdsOf(List<AssignmentDraft> drafts) {
+        Set<UUID> ids = new HashSet<>();
+        for (AssignmentDraft draft : drafts) {
+            if (draft.roleIds() == null) {
+                continue;
+            }
+            for (UUID roleId : draft.roleIds()) {
+                if (roleId != null) {
+                    ids.add(roleId);
+                }
+            }
+        }
+        return ids;
     }
 
     private List<AssignmentDraft> drafts(List<PlantBindingInput> plants) {

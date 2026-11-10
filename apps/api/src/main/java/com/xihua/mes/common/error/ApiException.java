@@ -109,6 +109,32 @@ public class ApiException extends RuntimeException {
                 List.of(new FieldError("permission", ErrorCodes.PERMISSION_DENIED, permCode)));
     }
 
+    public static ApiException duplicatePermCode(String permCode) {
+        return new ApiException(HttpStatus.CONFLICT, ErrorCodes.DUPLICATE_PERM_CODE,
+                "权限点编码已存在：" + permCode,
+                List.of(new FieldError("permCode", ErrorCodes.DUPLICATE_PERM_CODE, "权限点编码已存在：" + permCode)));
+    }
+
+    public static ApiException menuHasChildren() {
+        return new ApiException(HttpStatus.CONFLICT, ErrorCodes.MENU_HAS_CHILDREN, "请先删除子节点", List.of());
+    }
+
+    public static ApiException menuInUse(List<String> roleCodes) {
+        String joined = String.join(", ", roleCodes);
+        List<FieldError> errors = roleCodes.stream()
+                .map(code -> new FieldError("roles", ErrorCodes.MENU_IN_USE, code))
+                .toList();
+        return new ApiException(HttpStatus.CONFLICT, ErrorCodes.MENU_IN_USE, "菜单已被角色引用：" + joined, errors);
+    }
+
+    public static ApiException menuParentInvalid(String detail) {
+        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorCodes.MENU_PARENT_INVALID, detail, List.of());
+    }
+
+    public static ApiException builtinProtected(String detail) {
+        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorCodes.BUILTIN_PROTECTED, detail, List.of());
+    }
+
     public static ApiException plantMismatch() {
         return new ApiException(HttpStatus.BAD_REQUEST, ErrorCodes.PLANT_MISMATCH,
                 "X-Plant-Id 与当前工厂不一致", List.of());

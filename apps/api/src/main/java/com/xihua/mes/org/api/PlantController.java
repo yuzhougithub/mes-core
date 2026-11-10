@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
 import com.xihua.mes.org.api.PlantDtos.PlantCreate;
@@ -35,6 +36,7 @@ public class PlantController {
     }
 
     @GetMapping
+    @RequiresPerm("org:plant:list")
     public PageResult<PlantView> list(HttpServletRequest request,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Boolean enabled) {
@@ -42,22 +44,26 @@ public class PlantController {
     }
 
     @PostMapping
+    @RequiresPerm(value = "org:plant:create", global = true)
     public ResponseEntity<PlantView> create(@RequestBody PlantCreate req) {
         PlantView view = service.create(req);
         return ResponseEntity.created(URI.create("/api/v1/plants/" + view.id())).body(view);
     }
 
     @GetMapping("/{id}")
+    @RequiresPerm("org:plant:view")
     public PlantView get(@PathVariable UUID id) {
         return service.get(id);
     }
 
     @PutMapping("/{id}")
+    @RequiresPerm(value = "org:plant:update", global = true)
     public PlantView update(@PathVariable UUID id, @RequestBody PlantUpdate req) {
         return service.update(id, req);
     }
 
     @DeleteMapping("/{id}")
+    @RequiresPerm(value = "org:plant:delete", global = true)
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         service.delete(id, lockVersion);
         return ResponseEntity.noContent().build();

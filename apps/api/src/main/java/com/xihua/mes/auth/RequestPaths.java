@@ -37,4 +37,16 @@ final class RequestPaths {
         return "POST".equalsIgnoreCase(request.getMethod())
                 && "/api/v1/auth/change-password".equals(path(request));
     }
+
+    /**
+     * While a password change is required, only change-password and {@code GET /auth/me}
+     * are accepted. Logout stays reachable because it does not need an access token.
+     */
+    static boolean allowedDuringPasswordChange(HttpServletRequest request) {
+        if (changePassword(request)) {
+            return true;
+        }
+        return "GET".equalsIgnoreCase(request.getMethod())
+                && "/api/v1/auth/me".equals(path(request));
+    }
 }
