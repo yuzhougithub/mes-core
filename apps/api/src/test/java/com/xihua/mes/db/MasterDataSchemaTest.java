@@ -20,7 +20,7 @@ class MasterDataSchemaTest extends PgIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void v2CreatesTwentyNineTablesAndSeeds() {
+    void v2TablesRemainAndV3FoundationIsApplied() {
         Integer tables = jdbc.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name ~ '^(org|mat|rtg|res|cfg)_'""", Integer.class);
@@ -28,7 +28,11 @@ class MasterDataSchemaTest extends PgIntegrationTest {
         assertThat(jdbc.queryForList("SELECT code FROM org_role ORDER BY code", String.class))
                 .containsExactly("ADMIN", "EDITOR", "VIEWER");
         assertThat(jdbc.queryForObject("SELECT max(version) FROM flyway_schema_history", String.class))
-                .isEqualTo("2");
+                .isEqualTo("3");
+        assertThat(jdbc.queryForObject(
+                "SELECT to_regclass('public.sys_user') IS NOT NULL", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject(
+                "SELECT to_regclass('public.auth_refresh_token') IS NOT NULL", Boolean.class)).isTrue();
         Integer server = jdbc.queryForObject("SELECT current_setting('server_version_num')::int", Integer.class);
         assertThat(server).isGreaterThanOrEqualTo(150000);
     }

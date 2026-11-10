@@ -13,6 +13,8 @@ package com.xihua.mes.auth;
 public final class CurrentContext {
 
     private static final ThreadLocal<String> USER_ID = new ThreadLocal<>();
+    private static final ThreadLocal<String> PERSON_ID = new ThreadLocal<>();
+    private static final ThreadLocal<java.util.UUID> JTI = new ThreadLocal<>();
 
     private CurrentContext() {
     }
@@ -64,6 +66,21 @@ public final class CurrentContext {
         return USER_ID.get();
     }
 
+    /** @return current person id, or {@code null} if unset (header mode does not invent one) */
+    public static String personId() {
+        return PERSON_ID.get();
+    }
+
+    /** @return current person id as UUID, or {@code null} if unset / not a UUID */
+    public static java.util.UUID personUuid() {
+        return parseUuid(PERSON_ID.get());
+    }
+
+    /** @return access-token {@code jti} when this request was authenticated with a JWT */
+    public static java.util.UUID jti() {
+        return JTI.get();
+    }
+
     static void setUserId(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId must be a non-blank string");
@@ -71,12 +88,41 @@ public final class CurrentContext {
         USER_ID.set(userId);
     }
 
+    static void setPersonId(String personId) {
+        if (personId == null || personId.isBlank()) {
+            PERSON_ID.remove();
+            return;
+        }
+        PERSON_ID.set(personId);
+    }
+
     static void clearUserId() {
         USER_ID.remove();
     }
 
+    static void setJti(java.util.UUID jti) {
+        if (jti == null) {
+            JTI.remove();
+            return;
+        }
+        JTI.set(jti);
+    }
+
     static void clear() {
         clearUserId();
+        PERSON_ID.remove();
+        JTI.remove();
         PlantContext.clear();
+    }
+
+    private static java.util.UUID parseUuid(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return java.util.UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }

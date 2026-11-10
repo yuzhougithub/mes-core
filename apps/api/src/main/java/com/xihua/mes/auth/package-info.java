@@ -2,7 +2,7 @@
  * Auth and plant-scoped access.
  * Business code: {@link com.xihua.mes.auth.CurrentContext}.
  * Storage: {@link com.xihua.mes.auth.PlantContext} + header filter when {@code mes.auth.mode=header}
- * (dev/test only). Default {@code jwt} ignores client {@code X-Plant-Id} and fails closed
- * until a token adapter writes {@link com.xihua.mes.auth.CurrentContext}.
+ * (dev/test only). Default {@code jwt} fills {@link com.xihua.mes.auth.CurrentContext} from the
+ * access token and rejects a mismatched or header-only {@code X-Plant-Id}.
  */
 package com.xihua.mes.auth;

@@ -11,8 +11,8 @@ import jakarta.annotation.PostConstruct;
  * only when every active profile is {@code dev} or {@code test}. Staging, production, and a
  * process with no profile must not start in header mode.
  * <p>
- * The default mode is {@code jwt}. JWT is not implemented yet: {@link PlantContextFilter} does
- * not read {@code X-Plant-Id}, so calls that need a plant fail closed with {@code PLANT_REQUIRED}.
+ * The default mode is {@code jwt}. {@link JwtAuthenticationFilter} accepts only a Bearer access
+ * token and rejects a client {@code X-Plant-Id} that does not match the token ({@code PLANT_MISMATCH}).
  */
 @Component
 public class AuthModeGuard {

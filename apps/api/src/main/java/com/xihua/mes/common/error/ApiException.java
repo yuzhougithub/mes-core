@@ -67,4 +67,50 @@ public class ApiException extends RuntimeException {
     public static ApiException validation(List<FieldError> errors) {
         return unprocessable(ErrorCodes.VALIDATION_FAILED, errors.size() + " 个字段不合法", errors);
     }
+
+    public static ApiException passwordPolicy(List<FieldError> errors) {
+        return unprocessable(ErrorCodes.PASSWORD_POLICY, "密码不符合策略", errors);
+    }
+
+    public static ApiException unauthenticated(String detail) {
+        return new ApiException(HttpStatus.UNAUTHORIZED, ErrorCodes.UNAUTHENTICATED, detail, List.of());
+    }
+
+    public static ApiException tokenExpired() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_EXPIRED, "登录已过期", List.of());
+    }
+
+    public static ApiException tokenInvalid() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_INVALID, "登录凭证无效", List.of());
+    }
+
+    public static ApiException badCredentials() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, ErrorCodes.BAD_CREDENTIALS, "用户名或密码错误", List.of());
+    }
+
+    public static ApiException accountLocked() {
+        return new ApiException(HttpStatus.FORBIDDEN, ErrorCodes.ACCOUNT_LOCKED, "账号已锁定，请稍后再试", List.of());
+    }
+
+    public static ApiException accountDisabled() {
+        return new ApiException(HttpStatus.FORBIDDEN, ErrorCodes.ACCOUNT_DISABLED, "账号已停用", List.of());
+    }
+
+    public static ApiException passwordChangeRequired() {
+        return new ApiException(HttpStatus.FORBIDDEN, ErrorCodes.PASSWORD_CHANGE_REQUIRED, "请先修改密码", List.of());
+    }
+
+    public static ApiException noPlantAssignment() {
+        return new ApiException(HttpStatus.FORBIDDEN, ErrorCodes.NO_PLANT_ASSIGNMENT, "没有可用的工厂任职", List.of());
+    }
+
+    public static ApiException permissionDenied(String permCode) {
+        return new ApiException(HttpStatus.FORBIDDEN, ErrorCodes.PERMISSION_DENIED, "缺少权限点 " + permCode,
+                List.of(new FieldError("permission", ErrorCodes.PERMISSION_DENIED, permCode)));
+    }
+
+    public static ApiException plantMismatch() {
+        return new ApiException(HttpStatus.BAD_REQUEST, ErrorCodes.PLANT_MISMATCH,
+                "X-Plant-Id 与当前工厂不一致", List.of());
+    }
 }
