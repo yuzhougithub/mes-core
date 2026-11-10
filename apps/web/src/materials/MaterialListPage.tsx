@@ -15,11 +15,11 @@ import { deleteMaterial, listMaterials, listUoms } from '../api/resources.ts'
 import { formatProblem, isStale, toApiError, type ApiError } from '../api/problem.ts'
 import { getPlantEpoch } from '../api/plant-session.ts'
 import type { Material, Uom } from '../api/types.ts'
-import { usePlant } from '../plant/PlantProvider.tsx'
+import { usePlant } from '../plant/usePlant.ts'
 import { setMaterialsEnabled } from './batch-enabled.ts'
 import { MATERIAL_STATUSES, plantStoppedMeta, statusMeta } from './constants.ts'
 import { MaterialDrawer, type DrawerMode } from './MaterialDrawer.tsx'
-import { DEFAULT_MATERIAL_QUERY, materialSort, pageSummary, toMaterialParams, type MaterialListQuery } from './query.ts'
+import { DEFAULT_MATERIAL_QUERY, materialSort, pageSummary, resolvePage, toMaterialParams, type MaterialListQuery } from './query.ts'
 
 function columnSortOrder(field: string, sort: string): 'ascend' | 'descend' | undefined {
   const [name, direction] = sort.split(',')
@@ -60,7 +60,7 @@ function MaterialList() {
   const [applied, setApplied] = useState<MaterialListQuery>(DEFAULT_MATERIAL_QUERY)
   const [rows, setRows] = useState<Material[]>([])
   const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
@@ -71,13 +71,17 @@ function MaterialList() {
   useEffect(() => {
     const epoch = getPlantEpoch()
     let cancelled = false
-    setLoading(true)
-    setError(null)
     listMaterials(toMaterialParams(applied))
       .then((page) => {
         if (cancelled || getPlantEpoch() !== epoch) return
+        const nextPage = resolvePage(applied.page, applied.size, page.total)
+        if (nextPage !== applied.page) {
+          setApplied((prev) => (prev.page === applied.page ? { ...prev, page: nextPage } : prev))
+          return
+        }
         setRows(page.items)
         setTotal(page.total)
+        setError(null)
         setLoading(false)
       })
       .catch((err: unknown) => {
@@ -111,7 +115,7 @@ function MaterialList() {
 
   function uomLabel(id: string): string {
     const uom = uoms.find((item) => item.id === id)
-    if (!uom) return id
+    if (!uom) return '未知单位'
     return `${uom.name}（${uom.code}）`
   }
 
@@ -198,7 +202,7 @@ function MaterialList() {
       title: '分类',
       dataIndex: 'categoryId',
       width: 120,
-      render: (value: string | null | undefined) => value || '—',
+      render: () => '—',
     },
     {
       title: '状态',
@@ -409,7 +413,8 @@ function MaterialList() {
           onChange={(pagination, _filters, sorter) => {
             const current = Array.isArray(sorter) ? sorter[0] : sorter
             const nextSize = pagination.pageSize ?? applied.size
-            const nextPage = nextSize !== applied.size ? 1 : (pagination.current ?? 1)
+            const requested = nextSize !== applied.size ? 1 : (pagination.current ?? 1)
+            const nextPage = resolvePage(requested, nextSize, total)
             const sort = materialSort(current?.field, current?.order)
             setApplied((prev) => {
               if (prev.page === nextPage && prev.size === nextSize && prev.sort === sort) return prev

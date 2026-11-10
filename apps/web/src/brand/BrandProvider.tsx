@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { BrandContext } from './brand-context.ts'
 import { BRAND_DEFAULTS, loadBrandConfig, type BrandConfig } from './config.ts'
-
-const BrandContext = createContext<BrandConfig>(BRAND_DEFAULTS)
 
 function envBrand(): { logo?: string; name?: string; subtitle?: string } {
   return {
@@ -29,8 +28,4 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   }, [brand.name])
 
   return <BrandContext.Provider value={brand}>{children}</BrandContext.Provider>
-}
-
-export function useBrand(): BrandConfig {
-  return useContext(BrandContext)
 }

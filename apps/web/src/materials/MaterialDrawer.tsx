@@ -12,7 +12,8 @@ import {
 import { ApiError, formatProblem, isStale, toApiError, type ProblemDetails } from '../api/problem.ts'
 import { getPlantEpoch } from '../api/plant-session.ts'
 import type { Material, MaterialStatus, Uom } from '../api/types.ts'
-import { SchemaForm, fromFormValues } from '../schema/SchemaForm.tsx'
+import { fromFormValues } from '../schema/form-values.ts'
+import { SchemaForm } from '../schema/SchemaForm.tsx'
 import { parseFormSchema } from '../schema/parse.ts'
 import type { FieldDef, FormSchema, SchemaValues } from '../schema/types.ts'
 import { MATERIAL_TYPES } from './constants.ts'
@@ -66,10 +67,6 @@ export function MaterialDrawer({
     if (!open) return
     const epoch = getPlantEpoch()
     let cancelled = false
-    setLoading(true)
-    setLoadError(null)
-    setSaveError(null)
-    setDetail(null)
     const materialPromise = mode === 'create' || !materialId
       ? Promise.resolve(null)
       : getMaterial(materialId)
@@ -361,7 +358,7 @@ export function MaterialDrawer({
                 <Form.Item label="分类">
                   <Tooltip title="即将上线">
                     <span className="mes-soon">
-                      <Input disabled value={mode === 'create' ? '' : (detail?.categoryId ?? '')} placeholder="分类" />
+                      <Input disabled value="" placeholder="—" />
                     </span>
                   </Tooltip>
                 </Form.Item>

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SchemaForm } from './SchemaForm.tsx'
 import type { FormSchema, SchemaValues } from './types.ts'
 import { compilePattern, patternCodePoints } from './rules.ts'
-import { toFormInitialValues } from './SchemaForm.tsx'
+import { toFormInitialValues } from './form-values.ts'
 
 afterEach(() => {
   cleanup()

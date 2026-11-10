@@ -35,6 +35,14 @@ export function toMaterialParams(
   return params
 }
 
+/** Keep the pager on a page that still has rows after a delete or a shorter result. */
+export function resolvePage(page: number, size: number, total: number): number {
+  const safeSize = size < 1 ? 1 : size
+  const last = Math.max(1, Math.ceil(Math.max(0, total) / safeSize))
+  if (page < 1) return 1
+  return Math.min(page, last)
+}
+
 export function materialSort(field: unknown, order: unknown): string {
   if (typeof field !== 'string' || !SORTABLE.has(field)) return 'code,asc'
   if (order === 'descend') return `${field},desc`

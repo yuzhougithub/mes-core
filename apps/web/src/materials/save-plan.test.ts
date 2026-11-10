@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { extPayload, planMaterialSave } from './save-plan.ts'
-import { materialSort, pageSummary, toMaterialParams } from './query.ts'
+import { materialSort, pageSummary, resolvePage, toMaterialParams } from './query.ts'
 import type { FieldDef } from '../schema/types.ts'
 
 const rohs: FieldDef = { key: 'rohs', type: 'boolean', title: 'RoHS', required: true }
@@ -37,6 +37,18 @@ describe('toMaterialParams', () => {
 describe('pageSummary', () => {
   it('formats the pager summary with the selection count', () => {
     expect(pageSummary(1248, 2)).toBe('共 1248 条记录，已选 2 项')
+  })
+})
+
+describe('resolvePage', () => {
+  it('steps back when the last row of the last page is gone', () => {
+    expect(resolvePage(2, 10, 10)).toBe(1)
+    expect(resolvePage(3, 10, 11)).toBe(2)
+  })
+
+  it('keeps a valid page after a sort that does not shrink the list', () => {
+    expect(resolvePage(2, 10, 25)).toBe(2)
+    expect(resolvePage(1, 10, 0)).toBe(1)
   })
 })
 

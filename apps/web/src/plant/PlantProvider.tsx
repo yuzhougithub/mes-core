@@ -1,26 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { listPlants } from '../api/resources.ts'
-import { ApiError, toApiError } from '../api/problem.ts'
-import {
-  getPlantSnapshot,
-  setActivePlant,
-  subscribePlantSession,
-} from '../api/plant-session.ts'
+import { toApiError, type ApiError } from '../api/problem.ts'
+import { setActivePlant } from '../api/plant-session.ts'
 import type { Plant } from '../api/types.ts'
+import { PlantContext, type PlantContextValue } from './plant-context.ts'
 
 const STORAGE_KEY = 'mes.plantId'
-
-type PlantContextValue = {
-  plants: Plant[]
-  plantsTotal: number
-  plantsTruncated: boolean
-  loading: boolean
-  error: ApiError | null
-  selectPlant: (id: string) => void
-  reloadPlants: () => void
-}
-
-const PlantContext = createContext<PlantContextValue | null>(null)
 
 function readSavedPlant(): string | null {
   try {
@@ -38,7 +23,7 @@ function writeSavedPlant(id: string) {
   }
 }
 
-export function PlantProvider({ children }: { children: React.ReactNode }) {
+export function PlantProvider({ children }: { children: ReactNode }) {
   const [plants, setPlants] = useState<Plant[]>([])
   const [plantsTotal, setPlantsTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -69,8 +54,34 @@ export function PlantProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    reloadPlants()
-  }, [reloadPlants])
+    let cancelled = false
+    listPlants()
+      .then((page) => {
+        if (cancelled) return
+        setPlants(page.items)
+        setPlantsTotal(page.total)
+        const saved = readSavedPlant()
+        const pick = page.items.find((plant) => plant.id === saved)?.id ?? page.items[0]?.id ?? null
+        if (pick) {
+          writeSavedPlant(pick)
+          setActivePlant(pick)
+        } else {
+          setActivePlant(null)
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(toApiError(err))
+        setPlants([])
+        setPlantsTotal(0)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const selectPlant = useCallback((id: string) => {
     writeSavedPlant(id)
@@ -88,17 +99,4 @@ export function PlantProvider({ children }: { children: React.ReactNode }) {
   }), [plants, plantsTotal, loading, error, selectPlant, reloadPlants])
 
   return <PlantContext.Provider value={value}>{children}</PlantContext.Provider>
-}
-
-export function usePlant() {
-  const context = useContext(PlantContext)
-  const session = useSyncExternalStore(subscribePlantSession, getPlantSnapshot, getPlantSnapshot)
-  if (!context) {
-    throw new Error('usePlant 必须在 PlantProvider 内使用')
-  }
-  return {
-    ...context,
-    plantId: session.plantId,
-    epoch: session.epoch,
-  }
 }

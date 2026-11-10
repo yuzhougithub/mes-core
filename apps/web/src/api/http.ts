@@ -68,7 +68,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const headers = new Headers()
   headers.set('Accept', 'application/json, application/problem+json')
   if (options.body !== undefined) headers.set('Content-Type', 'application/json')
-  if (usePlant && pinned) headers.set('X-Plant-Id', pinned)
+  if (import.meta.env.DEV && usePlant && pinned) headers.set('X-Plant-Id', pinned)
 
   let response: Response
   try {
@@ -89,17 +89,39 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (response.status === 204) return undefined as T
 
+  if (!isJsonBody(response)) {
+    if (!response.ok) throw unavailable(response)
+    return undefined as T
+  }
+
   const text = await response.text()
   let parsed: unknown = null
   if (text) {
     try {
       parsed = JSON.parse(text)
     } catch {
-      parsed = { detail: text }
+      if (!response.ok) throw unavailable(response)
+      return undefined as T
     }
   }
   if (!response.ok) {
     throw new ApiError(parseProblem(response.status, parsed, response.headers.get('X-Trace-Id')))
   }
   return parsed as T
+}
+
+function isJsonBody(response: Response): boolean {
+  const media = (response.headers.get('Content-Type') ?? '').split(';')[0]?.trim().toLowerCase()
+  return media === 'application/json' || media === 'application/problem+json'
+}
+
+function unavailable(response: Response): ApiError {
+  return new ApiError({
+    title: '服务暂不可用',
+    status: response.status,
+    detail: `服务暂不可用（HTTP ${response.status}）`,
+    code: `HTTP_${response.status}`,
+    errors: [],
+    traceId: response.headers.get('X-Trace-Id') ?? undefined,
+  })
 }

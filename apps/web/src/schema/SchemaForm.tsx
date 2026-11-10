@@ -16,7 +16,8 @@ import {
   type UploadFile,
   type UploadProps,
 } from 'antd'
-import dayjs, { type Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
+import { fromFormValues, toFormInitialValues } from './form-values.ts'
 import { buildRules } from './rules.ts'
 import type { FieldDef, FormSchema, SchemaValues } from './types.ts'
 
@@ -265,50 +266,6 @@ function FieldControl({
   }
 }
 
-/** Required booleans start at `false` so an untouched Switch counts as filled. */
-export function toFormInitialValues(
-  fields: FieldDef[],
-  values: SchemaValues | undefined,
-): Record<string, unknown> {
-  const next: Record<string, unknown> = {}
-  for (const field of fields) {
-    const raw = values?.[field.key]
-    if (field.type === 'boolean') {
-      next[field.key] = typeof raw === 'boolean' ? raw : false
-      continue
-    }
-    if (raw == null) continue
-    if (field.type === 'datetime' && typeof raw === 'string') {
-      const parsed = dayjs(raw)
-      next[field.key] = parsed.isValid() ? parsed : undefined
-    } else {
-      next[field.key] = raw
-    }
-  }
-  return next
-}
-
-export function fromFormValues(
-  fields: FieldDef[],
-  values: Record<string, unknown>,
-): SchemaValues {
-  const next: SchemaValues = {}
-  for (const field of fields) {
-    const raw = values[field.key]
-    if (field.type === 'boolean') {
-      next[field.key] = raw === true
-      continue
-    }
-    if (raw == null || raw === '') continue
-    if (field.type === 'datetime' && dayjs.isDayjs(raw)) {
-      next[field.key] = (raw as Dayjs).toISOString()
-      continue
-    }
-    next[field.key] = raw as SchemaValues[string]
-  }
-  return next
-}
-
 /**
  * Thin schema → Ant Design Form renderer.
  * Maps FieldDef.type to controls; ignores unknown schema keys.
@@ -324,7 +281,8 @@ export function SchemaForm({
 }: SchemaFormProps) {
   const [ownedForm] = Form.useForm()
   const formInstance = form ?? ownedForm
-  const fields = Array.isArray(schema?.fields) ? schema.fields : []
+  const fieldList = schema?.fields
+  const fields = useMemo(() => (Array.isArray(fieldList) ? fieldList : []), [fieldList])
   const groups = useMemo(() => groupFields(fields), [fields])
   const formInitial = useMemo(
     () => toFormInitialValues(fields, initialValues),

@@ -76,6 +76,38 @@ describe('apiRequest', () => {
     await expect(pending).rejects.toBeInstanceOf(StalePlantResponse)
   })
 
+  it('omits X-Plant-Id when the build is not DEV', async () => {
+    vi.stubEnv('DEV', false)
+    setActivePlant('plant-a')
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(new Headers(init?.headers).get('X-Plant-Id')).toBeNull()
+      return jsonResponse({ items: [], page: 1, size: 20, total: 0 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await apiRequest('/api/v1/materials')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides non-json error bodies behind a fixed message', async () => {
+    setActivePlant('plant-a')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>upstream secret</html>', {
+      status: 502,
+      headers: { 'Content-Type': 'text/html' },
+    })))
+    await expect(apiRequest('/api/v1/materials')).rejects.toMatchObject({
+      problem: { detail: '服务暂不可用（HTTP 502）', status: 502 },
+    })
+    try {
+      await apiRequest('/api/v1/materials')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError)
+      if (err instanceof ApiError) {
+        expect(err.problem.detail).not.toContain('secret')
+        expect(err.problem.detail).not.toContain('<html>')
+      }
+    }
+  })
+
   it('refuses plant calls before a factory is selected', async () => {
     await expect(apiRequest('/api/v1/materials')).rejects.toMatchObject({
       problem: { code: 'PLANT_REQUIRED' },

@@ -22,9 +22,9 @@ import {
 } from '@ant-design/icons'
 import { Alert, Avatar, Button, Dropdown, Menu, Popover, Select, Tabs } from 'antd'
 import { useState, type ReactNode } from 'react'
-import { useBrand } from '../brand/BrandProvider.tsx'
+import { useBrand } from '../brand/useBrand.ts'
 import { MaterialListPage } from '../materials/MaterialListPage.tsx'
-import { usePlant } from '../plant/PlantProvider.tsx'
+import { usePlant } from '../plant/usePlant.ts'
 import { Placeholder } from './Placeholder.tsx'
 import { MODULES, findModule, type ModuleKey } from './nav.ts'
 

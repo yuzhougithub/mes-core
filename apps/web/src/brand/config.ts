@@ -19,10 +19,20 @@ export type BrandEnv = {
   subtitle?: string
 }
 
+function stripControls(value: string): string {
+  let out = ''
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0
+    if (code <= 0x1f || code === 0x7f) continue
+    out += char
+  }
+  return out
+}
+
 /** Plain text only. Callers must render with React text nodes, never as HTML. */
 function plainText(value: unknown, max: number): string | undefined {
   if (typeof value !== 'string') return undefined
-  const text = value.replace(/[\u0000-\u001F\u007F]/g, '').trim()
+  const text = stripControls(value).trim()
   if (!text) return undefined
   return Array.from(text).slice(0, max).join('')
 }
@@ -30,7 +40,7 @@ function plainText(value: unknown, max: number): string | undefined {
 function optionalText(value: unknown, max: number): string | undefined {
   if (value == null) return undefined
   if (typeof value !== 'string') return undefined
-  const text = value.replace(/[\u0000-\u001F\u007F]/g, '').trim()
+  const text = stripControls(value).trim()
   return Array.from(text).slice(0, max).join('')
 }
 
