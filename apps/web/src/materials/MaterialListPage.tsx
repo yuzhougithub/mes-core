@@ -58,11 +58,18 @@ function MaterialList() {
   const { message, modal } = App.useApp()
   const [draft, setDraft] = useState({ q: '', status: '' })
   const [applied, setApplied] = useState<MaterialListQuery>(DEFAULT_MATERIAL_QUERY)
-  const [rows, setRows] = useState<Material[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<ApiError | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
+  const requestKey = `${applied.page}|${applied.size}|${applied.sort}|${applied.q}|${applied.status}|${reloadToken}`
+  const [settled, setSettled] = useState<{
+    key: string
+    rows: Material[]
+    total: number
+    error: ApiError | null
+  } | null>(null)
+  const loading = settled?.key !== requestKey
+  const error = settled?.key === requestKey ? settled.error : null
+  const rows = settled?.rows ?? []
+  const total = settled?.total ?? 0
   const [selected, setSelected] = useState<string[]>([])
   const [acting, setActing] = useState(false)
   const [uoms, setUoms] = useState<Uom[]>([])
@@ -71,6 +78,7 @@ function MaterialList() {
   useEffect(() => {
     const epoch = getPlantEpoch()
     let cancelled = false
+    const key = `${applied.page}|${applied.size}|${applied.sort}|${applied.q}|${applied.status}|${reloadToken}`
     listMaterials(toMaterialParams(applied))
       .then((page) => {
         if (cancelled || getPlantEpoch() !== epoch) return
@@ -79,17 +87,11 @@ function MaterialList() {
           setApplied((prev) => (prev.page === applied.page ? { ...prev, page: nextPage } : prev))
           return
         }
-        setRows(page.items)
-        setTotal(page.total)
-        setError(null)
-        setLoading(false)
+        setSettled({ key, rows: page.items, total: page.total, error: null })
       })
       .catch((err: unknown) => {
         if (cancelled || isStale(err) || getPlantEpoch() !== epoch) return
-        setRows([])
-        setTotal(0)
-        setError(toApiError(err))
-        setLoading(false)
+        setSettled({ key, rows: [], total: 0, error: toApiError(err) })
       })
     return () => {
       cancelled = true

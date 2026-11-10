@@ -123,4 +123,87 @@ describe('admin shell and material list', () => {
     expect(screen.queryByText('AAA-CODE')).toBeNull()
     expect(screen.getByText('BBB-CODE')).toBeTruthy()
   })
+
+  it('shows a loading state while the material list reloads', async () => {
+    const user = userEvent.setup()
+    let materialLists = 0
+    const pendingList: { resolve: ((response: Response) => void) | null } = { resolve: null }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith('/api/v1/plants')) {
+        return Response.json(page([plant(PLANT_A, 'P1', '一厂')]))
+      }
+      if (url.startsWith('/api/v1/uoms')) {
+        return Response.json(page([{ id: UOM, code: 'PCS', name: '件', decimals: 0, enabled: true, lockVersion: 0 }]))
+      }
+      if (url.startsWith('/api/v1/materials')) {
+        materialLists += 1
+        if (materialLists === 1) return Response.json(page([material('AAA-CODE')]))
+        return new Promise<Response>((resolve) => {
+          pendingList.resolve = resolve
+        })
+      }
+      return Response.json({})
+    }))
+
+    render(<App />)
+    expect(await screen.findByText('AAA-CODE')).toBeTruthy()
+    await user.click(screen.getByRole('columnheader', { name: '编码' }))
+    expect(document.querySelector('.ant-spin-spinning')).toBeTruthy()
+    pendingList.resolve?.(Response.json(page([material('AAA-CODE')])))
+    await waitFor(() => expect(document.querySelector('.ant-spin-spinning')).toBeNull())
+    expect(screen.getByText('AAA-CODE')).toBeTruthy()
+  })
+
+  it('shows the form after a failed material load is retried', async () => {
+    const user = userEvent.setup()
+    const detailId = '00000000-0000-4000-8000-0000000000a1'
+    let detailCalls = 0
+    const pendingDetail: { resolve: ((response: Response) => void) | null } = { resolve: null }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith('/api/v1/plants')) {
+        return Response.json(page([plant(PLANT_A, 'P1', '一厂')]))
+      }
+      if (url.startsWith('/api/v1/uoms')) {
+        return Response.json(page([{ id: UOM, code: 'PCS', name: '件', decimals: 0, enabled: true, lockVersion: 0 }]))
+      }
+      if (url.startsWith('/api/v1/custom-field-schemas/')) {
+        return Response.json({
+          entityType: 'material',
+          plantId: PLANT_A,
+          schema: { schemaVersion: 1, fields: [] },
+          lockVersion: 0,
+        })
+      }
+      if (url.startsWith(`/api/v1/materials/${detailId}`)) {
+        detailCalls += 1
+        if (detailCalls === 1) {
+          return Response.json(
+            { title: '加载失败', status: 500, detail: '暂时失败', code: 'INTERNAL', errors: [] },
+            { status: 500 },
+          )
+        }
+        return new Promise<Response>((resolve) => {
+          pendingDetail.resolve = resolve
+        })
+      }
+      if (url.startsWith('/api/v1/materials')) {
+        return Response.json(page([material('AAA-CODE')]))
+      }
+      return Response.json({ title: 'missing', status: 404, detail: url, code: 'NOT_FOUND', errors: [] }, { status: 404 })
+    }))
+
+    render(<App />)
+    expect(await screen.findByText('AAA-CODE')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: '编辑' }))
+    expect(await screen.findByRole('button', { name: '重试' })).toBeTruthy()
+    expect(screen.queryByRole('textbox', { name: '名称' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: '重试' }))
+    expect(await screen.findByText('正在加载物料、计量单位和自定义字段…')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+    pendingDetail.resolve?.(Response.json(material('AAA-CODE')))
+    expect(await screen.findByDisplayValue('一厂外壳')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+  })
 })

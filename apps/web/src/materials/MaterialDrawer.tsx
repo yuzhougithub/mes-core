@@ -62,6 +62,22 @@ export function MaterialDrawer({
   const [schema, setSchema] = useState<FormSchema>({ schemaVersion: 1, fields: [] })
   const [uoms, setUoms] = useState<Uom[]>([])
   const [attempt, setAttempt] = useState(0)
+  const loadScope = `${mode}:${materialId ?? ''}`
+  const [seenScope, setSeenScope] = useState(loadScope)
+  if (seenScope !== loadScope) {
+    setSeenScope(loadScope)
+    setLoading(true)
+    setLoadError(null)
+    setSaveError(null)
+    setDetail(null)
+  }
+
+  function beginLoad() {
+    setLoading(true)
+    setLoadError(null)
+    setSaveError(null)
+    setDetail(null)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -85,6 +101,7 @@ export function MaterialDrawer({
         setDetail(material)
         setSchema(parseFormSchema(schemaView.schema))
         setUoms(items)
+        setLoadError(null)
         setLoading(false)
       })
       .catch((err: unknown) => {
@@ -187,6 +204,7 @@ export function MaterialDrawer({
           if (isStale(err)) return
           applyProblem(toApiError(err).problem)
           message.error('物料已保存，扩展信息没有保存成功。请再试一次。')
+          beginLoad()
           setAttempt((value) => value + 1)
           return
         }
@@ -199,6 +217,7 @@ export function MaterialDrawer({
       applyProblem(problem)
       if (problem.code === 'STALE_VERSION') {
         message.warning('数据已变化，请按最新内容重新保存。')
+        beginLoad()
         setAttempt((value) => value + 1)
       }
     } finally {
@@ -259,7 +278,16 @@ export function MaterialDrawer({
           description={
             <div>
               <div style={{ whiteSpace: 'pre-wrap' }}>{formatProblem(loadError.problem)}</div>
-              <Button size="small" style={{ marginTop: 8 }} onClick={() => setAttempt((value) => value + 1)}>重试</Button>
+              <Button
+                size="small"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  beginLoad()
+                  setAttempt((value) => value + 1)
+                }}
+              >
+                重试
+              </Button>
             </div>
           }
         />
