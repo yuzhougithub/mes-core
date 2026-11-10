@@ -1,4 +1,7 @@
 # Integration tests send X-Plant-Id. Allowed only because the test profile is active (A2).
+# The seed admin password is injected here (or by MES_ADMIN_INITIAL_PASSWORD), never in the migration.
 mes:
   auth:
     mode: header
+    admin:
+      initial-password: ${MES_ADMIN_INITIAL_PASSWORD:T3st-Only-Pass}

@@ -27,7 +27,7 @@ docker compose -f deploy/docker-compose.yml up --build
 
 这条 Compose 给 API 设置了 `SPRING_PROFILES_ACTIVE=dev`。`dev` profile 使用 `mes.auth.mode=header`：业务接口认请求头 `X-Plant-Id`（可选 `X-User-Id`）。只用于本机开发。
 
-staging、生产以及其他非 dev 环境不要激活 `dev` profile，必须使用默认的 `jwt`。`jwt` 不信任客户端传来的 `X-Plant-Id`。JWT 尚未实现时，需要工厂上下文的接口会返回 400 `PLANT_REQUIRED`。
+staging、生产以及其他非 dev 环境不要激活 `dev` profile，必须使用默认的 `jwt`。`jwt` 不信任客户端传来的 `X-Plant-Id`；当前工厂来自 access token 的 `plt`。非 dev 环境还必须设置 `MES_ADMIN_INITIAL_PASSWORD`，见 [deploy/README.md](deploy/README.md)。
 
 - API 健康检查：<http://localhost:8080/actuator/health>
 - OpenAPI：<http://localhost:8080/swagger-ui/index.html>

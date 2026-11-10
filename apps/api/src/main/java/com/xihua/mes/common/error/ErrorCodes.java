@@ -5,7 +5,19 @@ public final class ErrorCodes {
 
     public static final String BAD_REQUEST = "BAD_REQUEST";
     public static final String PLANT_REQUIRED = "PLANT_REQUIRED";
+    public static final String PLANT_MISMATCH = "PLANT_MISMATCH";
     public static final String PLANT_FORBIDDEN = "PLANT_FORBIDDEN";
+    public static final String UNAUTHENTICATED = "UNAUTHENTICATED";
+    public static final String TOKEN_EXPIRED = "TOKEN_EXPIRED";
+    public static final String TOKEN_INVALID = "TOKEN_INVALID";
+    public static final String FORBIDDEN = "FORBIDDEN";
+    public static final String PERMISSION_DENIED = "PERMISSION_DENIED";
+    public static final String ACCOUNT_LOCKED = "ACCOUNT_LOCKED";
+    public static final String ACCOUNT_DISABLED = "ACCOUNT_DISABLED";
+    public static final String PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED";
+    public static final String NO_PLANT_ASSIGNMENT = "NO_PLANT_ASSIGNMENT";
+    public static final String PASSWORD_POLICY = "PASSWORD_POLICY";
+    public static final String BAD_CREDENTIALS = "BAD_CREDENTIALS";
     public static final String NOT_FOUND = "NOT_FOUND";
     public static final String DUPLICATE_CODE = "DUPLICATE_CODE";
     public static final String STALE_VERSION = "STALE_VERSION";
@@ -30,6 +42,10 @@ public final class ErrorCodes {
     public static final String INVALID_VALUE = "INVALID_VALUE";
     public static final String IMMUTABLE = "IMMUTABLE";
     public static final String DUPLICATE = "DUPLICATE";
+    public static final String TOO_SHORT = "TOO_SHORT";
+    public static final String TOO_FEW_CLASSES = "TOO_FEW_CLASSES";
+    public static final String CONTAINS_USERNAME = "CONTAINS_USERNAME";
+    public static final String SAME_AS_OLD = "SAME_AS_OLD";
 
     private ErrorCodes() {
     }

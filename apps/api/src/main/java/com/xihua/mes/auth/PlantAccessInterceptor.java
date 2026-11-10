@@ -25,6 +25,12 @@ public class PlantAccessInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         UUID plantId = CurrentContext.requirePlantUuid();
+        if (NoPlant.ID.equals(plantId)) {
+            if (!NoPlant.allows(request)) {
+                throw ApiException.noPlantAssignment();
+            }
+            return true;
+        }
         if (!plants.isActive(plantId)) {
             throw ApiException.plantForbidden("工厂不存在或已停用：" + plantId);
         }

@@ -29,10 +29,10 @@ import com.xihua.mes.common.PlantHeaderInvalidException;
  * {@code mes.auth.mode=header}. The default is {@code jwt}. Header mode is dev/test only
  * ({@link AuthModeGuard}).
  * <p>
- * JWT is not implemented yet. In {@code jwt} mode (and any mode other than {@code header})
- * this filter <b>does not</b> trust a client-supplied {@code X-Plant-Id}. Plant context stays
- * empty, so business code that calls {@link CurrentContext#requirePlantId()} fails closed
- * with 400 {@code PLANT_REQUIRED} until a token adapter populates {@link CurrentContext}.
+ * In {@code jwt} mode (and any mode other than {@code header}) this filter <b>does not</b> trust a
+ * client-supplied {@code X-Plant-Id}. {@link JwtAuthenticationFilter} fills {@link CurrentContext}
+ * from the access token, or rejects the request. A missing token therefore cannot satisfy
+ * {@link CurrentContext#requirePlantId()}.
  * <p>
  * Missing {@code X-Plant-Id} does not fail the filter (health / OpenAPI stay reachable);
  * business code uses {@link CurrentContext#requirePlantId()}.

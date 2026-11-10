@@ -20,6 +20,7 @@ public interface PlantMapper extends BaseMapper<Plant> {
                 OR EXISTS (SELECT 1 FROM rtg_operation WHERE plant_id = #{id} AND NOT deleted)
                 OR EXISTS (SELECT 1 FROM rtg_routing WHERE plant_id = #{id} AND NOT deleted)
                 OR EXISTS (SELECT 1 FROM org_workshop WHERE plant_id = #{id} AND NOT deleted)
+                OR EXISTS (SELECT 1 FROM org_person_plant WHERE plant_id = #{id})
                 OR EXISTS (SELECT 1 FROM cfg_custom_field_schema WHERE plant_id = #{id})
             """)
     boolean hasPlantData(UUID id);

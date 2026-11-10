@@ -23,6 +23,10 @@ public class AuthWebConfig implements WebMvcConfigurer {
         }
         registry.addInterceptor(new PlantAccessInterceptor(directory))
                 .addPathPatterns("/api/v1/**")
-                .excludePathPatterns("/api/v1/plants", "/api/v1/plants/**");
+                .excludePathPatterns(
+                        "/api/v1/plants",
+                        "/api/v1/plants/**",
+                        "/api/v1/auth",
+                        "/api/v1/auth/**");
     }
 }
