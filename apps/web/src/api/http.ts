@@ -1,7 +1,9 @@
+import { emitPasswordChangeRequired, endSession, getAccessToken, refreshAccess } from '../auth/session.ts'
 import {
   ApiError,
   StalePlantResponse,
   parseProblem,
+  type ProblemDetails,
 } from './problem.ts'
 import {
   beginPlantRequest,
@@ -23,6 +25,9 @@ export type RequestOptions = {
   plant?: boolean
   /** Explicit factory. Mismatch with the session aborts before fetch. */
   plantId?: string
+  /** Attach the in-memory access token. Login sets this to false. */
+  auth?: boolean
+  credentials?: RequestCredentials
   signal?: AbortSignal
 }
 
@@ -43,6 +48,10 @@ function plantChanged(epochAtStart: number, pinned: string | null, usePlant: boo
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return requestOnce<T>(path, options, true)
+}
+
+async function requestOnce<T>(path: string, options: RequestOptions, allowRefresh: boolean): Promise<T> {
   const usePlant = options.plant !== false
   const pinned = usePlant ? (options.plantId ?? getPlantId()) : null
   const epochAtStart = getPlantEpoch()
@@ -69,6 +78,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   headers.set('Accept', 'application/json, application/problem+json')
   if (options.body !== undefined) headers.set('Content-Type', 'application/json')
   if (import.meta.env.DEV && usePlant && pinned) headers.set('X-Plant-Id', pinned)
+  if (options.auth !== false) {
+    const token = getAccessToken()
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+  }
 
   let response: Response
   try {
@@ -76,6 +89,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       method: options.method ?? (options.body !== undefined ? 'POST' : 'GET'),
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      credentials: options.credentials,
       signal: controller.signal,
     })
   } catch (err) {
@@ -105,9 +119,25 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
   }
   if (!response.ok) {
-    throw new ApiError(parseProblem(response.status, parsed, response.headers.get('X-Trace-Id')))
+    const problem = parseProblem(response.status, parsed, response.headers.get('X-Trace-Id'))
+    if (allowRefresh && shouldRefresh(problem, options.auth)) {
+      const refreshed = await refreshAccess()
+      if (plantChanged(epochAtStart, pinned, usePlant)) throw new StalePlantResponse()
+      if (!refreshed) throw new ApiError(problem)
+      return requestOnce<T>(path, options, false)
+    }
+    if (!allowRefresh && options.auth !== false && problem.status === 401) endSession()
+    if (problem.code === 'PASSWORD_CHANGE_REQUIRED') emitPasswordChangeRequired()
+    throw new ApiError(problem)
   }
   return parsed as T
+}
+
+function shouldRefresh(problem: ProblemDetails, auth: boolean | undefined): boolean {
+  if (auth === false || problem.status !== 401) return false
+  return problem.code === 'TOKEN_EXPIRED'
+    || problem.code === 'TOKEN_INVALID'
+    || problem.code === 'UNAUTHENTICATED'
 }
 
 function isJsonBody(response: Response): boolean {

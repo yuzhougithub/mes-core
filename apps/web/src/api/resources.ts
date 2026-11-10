@@ -18,6 +18,16 @@ export function listPlants(q?: string) {
   })
 }
 
+export function createPlant(body: {
+  code: string
+  name: string
+  timezone: string
+  enabled: boolean
+  remark: string | null
+}) {
+  return apiRequest<Plant>('/api/v1/plants', { method: 'POST', body, plant: false })
+}
+
 export function listUoms(query: { q?: string; enabled?: boolean; size?: number }) {
   return apiRequest<PageResult<Uom>>('/api/v1/uoms', {
     query: {

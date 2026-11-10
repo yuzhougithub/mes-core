@@ -18,14 +18,16 @@ import {
   ShareAltOutlined,
   TagOutlined,
   ToolOutlined,
-  UserOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
-import { Alert, Avatar, Button, Dropdown, Menu, Popover, Select, Tabs } from 'antd'
+import { Alert, Button, Menu, Popover, Select, Tabs } from 'antd'
 import { useState, type ReactNode } from 'react'
 import { useBrand } from '../brand/useBrand.ts'
 import { MaterialListPage } from '../materials/MaterialListPage.tsx'
 import { usePlant } from '../plant/usePlant.ts'
+import { UserListPage } from '../users/UserListPage.tsx'
 import { Placeholder } from './Placeholder.tsx'
+import { UserAccount } from './UserAccount.tsx'
 import { MODULES, findModule, type ModuleKey } from './nav.ts'
 
 const MENU_ICONS: Record<string, ReactNode> = {
@@ -42,6 +44,7 @@ const MENU_ICONS: Record<string, ReactNode> = {
   routings: <BranchesOutlined />,
   plants: <BankOutlined />,
   schemas: <FormOutlined />,
+  users: <TeamOutlined />,
 }
 
 function ToolButton({
@@ -130,13 +133,7 @@ export function AdminShell() {
           <ToolButton label="搜索" icon={<SearchOutlined />} />
           <ToolButton label="通知" icon={<BellOutlined />} />
           <ToolButton label="帮助" icon={<QuestionCircleOutlined />} />
-          <Dropdown
-            menu={{
-              items: [{ key: 'auth', disabled: true, label: '即将上线' }],
-            }}
-          >
-            <Button type="text" aria-label="当前用户" icon={<Avatar size="small" icon={<UserOutlined />} />} />
-          </Dropdown>
+          <UserAccount />
         </div>
       </header>
       <div className="mes-body">
@@ -172,7 +169,9 @@ export function AdminShell() {
           <div className="mes-breadcrumb">
             {item.breadcrumb.join(' / ')}
           </div>
-          {item.key === 'materials' ? <MaterialListPage /> : <Placeholder item={item} />}
+          {item.key === 'materials' ? <MaterialListPage /> : null}
+          {item.key === 'users' ? <UserListPage /> : null}
+          {item.key !== 'materials' && item.key !== 'users' ? <Placeholder item={item} /> : null}
         </main>
       </div>
     </div>

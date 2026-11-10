@@ -39,6 +39,11 @@ export function isStale(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'AbortError'
 }
 
+/** Forced password change replaces the shell. A 401 is shown, not dropped. */
+export function isAuthRedirect(err: unknown): boolean {
+  return err instanceof ApiError && err.problem.code === 'PASSWORD_CHANGE_REQUIRED'
+}
+
 export function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err
   const detail = err instanceof Error ? err.message : '请求失败'

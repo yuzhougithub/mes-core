@@ -1,102 +1,58 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { listPlants } from '../api/resources.ts'
-import { toApiError, type ApiError } from '../api/problem.ts'
-import { setActivePlant } from '../api/plant-session.ts'
+import { App } from 'antd'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { formatProblem, isStale, toApiError, type ApiError } from '../api/problem.ts'
 import type { Plant } from '../api/types.ts'
+import { reloadMe, switchPlant } from '../auth/store.ts'
+import { useAuth } from '../auth/useAuth.ts'
 import { PlantContext, type PlantContextValue } from './plant-context.ts'
 
-const STORAGE_KEY = 'mes.plantId'
-
-function readSavedPlant(): string | null {
-  try {
-    return sessionStorage.getItem(STORAGE_KEY)
-  } catch {
-    return null
-  }
-}
-
-function writeSavedPlant(id: string) {
-  try {
-    sessionStorage.setItem(STORAGE_KEY, id)
-  } catch {
-    /* private mode */
+function toPlant(option: { id: string; code: string | null; name: string | null }): Plant {
+  return {
+    id: option.id,
+    code: option.code ?? '',
+    name: option.name ?? '',
+    timezone: 'Asia/Shanghai',
+    enabled: true,
+    lockVersion: 0,
   }
 }
 
 export function PlantProvider({ children }: { children: ReactNode }) {
-  const [plants, setPlants] = useState<Plant[]>([])
-  const [plantsTotal, setPlantsTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const { message } = App.useApp()
+  const auth = useAuth()
   const [error, setError] = useState<ApiError | null>(null)
-
-  const reloadPlants = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    listPlants()
-      .then((page) => {
-        setPlants(page.items)
-        setPlantsTotal(page.total)
-        const saved = readSavedPlant()
-        const pick = page.items.find((plant) => plant.id === saved)?.id ?? page.items[0]?.id ?? null
-        if (pick) {
-          writeSavedPlant(pick)
-          setActivePlant(pick)
-        } else {
-          setActivePlant(null)
-        }
-      })
-      .catch((err: unknown) => {
-        setError(toApiError(err))
-        setPlants([])
-        setPlantsTotal(0)
-      })
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    listPlants()
-      .then((page) => {
-        if (cancelled) return
-        setPlants(page.items)
-        setPlantsTotal(page.total)
-        const saved = readSavedPlant()
-        const pick = page.items.find((plant) => plant.id === saved)?.id ?? page.items[0]?.id ?? null
-        if (pick) {
-          writeSavedPlant(pick)
-          setActivePlant(pick)
-        } else {
-          setActivePlant(null)
-        }
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        setError(toApiError(err))
-        setPlants([])
-        setPlantsTotal(0)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const [switching, setSwitching] = useState(false)
+  const plants = useMemo(() => (auth.me?.plants ?? []).map(toPlant), [auth.me])
 
   const selectPlant = useCallback((id: string) => {
-    writeSavedPlant(id)
-    setActivePlant(id)
+    setSwitching(true)
+    setError(null)
+    void switchPlant(id)
+      .catch((err: unknown) => {
+        if (isStale(err)) return
+        const api = toApiError(err)
+        setError(api)
+        message.error(formatProblem(api.problem))
+      })
+      .finally(() => setSwitching(false))
+  }, [message])
+
+  const reloadPlants = useCallback(() => {
+    setError(null)
+    void reloadMe().catch((err: unknown) => {
+      if (!isStale(err)) setError(toApiError(err))
+    })
   }, [])
 
   const value = useMemo<PlantContextValue>(() => ({
     plants,
-    plantsTotal,
-    plantsTruncated: plantsTotal > plants.length,
-    loading,
+    plantsTotal: plants.length,
+    plantsTruncated: false,
+    loading: switching,
     error,
     selectPlant,
     reloadPlants,
-  }), [plants, plantsTotal, loading, error, selectPlant, reloadPlants])
+  }), [plants, switching, error, selectPlant, reloadPlants])
 
   return <PlantContext.Provider value={value}>{children}</PlantContext.Provider>
 }
