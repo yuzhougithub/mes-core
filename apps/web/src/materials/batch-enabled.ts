@@ -1,5 +1,5 @@
 import { getMaterial, putPlantExt } from '../api/resources.ts'
-import { StalePlantResponse, isStale, toApiError } from '../api/problem.ts'
+import { StalePlantResponse, isAuthRedirect, isStale, toApiError } from '../api/problem.ts'
 import { getPlantEpoch, getPlantId } from '../api/plant-session.ts'
 import type { MaterialStatus } from '../api/types.ts'
 
@@ -58,7 +58,7 @@ export async function setMaterialsEnabled(
       if (getPlantEpoch() !== epoch || getPlantId() !== plantId) throw new StalePlantResponse()
       result.updated += 1
     } catch (err) {
-      if (isStale(err)) throw new StalePlantResponse()
+      if (isStale(err) || isAuthRedirect(err)) throw new StalePlantResponse()
       const problem = toApiError(err).problem
       result.failures.push({
         id,

@@ -9,7 +9,7 @@ import {
   putPlantExt,
   updateMaterial,
 } from '../api/resources.ts'
-import { ApiError, formatProblem, isStale, toApiError, type ProblemDetails } from '../api/problem.ts'
+import { ApiError, formatProblem, isAuthRedirect, isStale, toApiError, type ProblemDetails } from '../api/problem.ts'
 import { getPlantEpoch } from '../api/plant-session.ts'
 import type { Material, MaterialStatus, Uom } from '../api/types.ts'
 import { fromFormValues } from '../schema/form-values.ts'
@@ -94,7 +94,7 @@ export function MaterialDrawer({
           try {
             items = [await getUom(material.uomId), ...items]
           } catch (err) {
-            if (isStale(err) || cancelled || getPlantEpoch() !== epoch) return
+            if (isStale(err) || isAuthRedirect(err) || cancelled || getPlantEpoch() !== epoch) return
           }
         }
         if (cancelled || getPlantEpoch() !== epoch) return
@@ -105,7 +105,7 @@ export function MaterialDrawer({
         setLoading(false)
       })
       .catch((err: unknown) => {
-        if (cancelled || isStale(err) || getPlantEpoch() !== epoch) return
+        if (cancelled || isStale(err) || isAuthRedirect(err) || getPlantEpoch() !== epoch) return
         setLoadError(toApiError(err))
         setLoading(false)
       })
@@ -184,7 +184,7 @@ export function MaterialDrawer({
           try {
             await putPlantExt(created.id, plan.ext)
           } catch (err) {
-            if (isStale(err)) return
+            if (isStale(err) || isAuthRedirect(err)) return
             const problem = toApiError(err).problem
             message.error(`物料已创建，但补充信息没有保存。${problem.detail || problem.title}`)
             onPartialCreate(created.id)
@@ -201,7 +201,7 @@ export function MaterialDrawer({
         try {
           await putPlantExt(materialId, plan.ext)
         } catch (err) {
-          if (isStale(err)) return
+          if (isStale(err) || isAuthRedirect(err)) return
           applyProblem(toApiError(err).problem)
           message.error('物料已保存，扩展信息没有保存成功。请再试一次。')
           beginLoad()
@@ -212,7 +212,7 @@ export function MaterialDrawer({
       message.success('已保存')
       onSaved()
     } catch (err) {
-      if (isStale(err)) return
+      if (isStale(err) || isAuthRedirect(err)) return
       const problem = toApiError(err).problem
       applyProblem(problem)
       if (problem.code === 'STALE_VERSION') {

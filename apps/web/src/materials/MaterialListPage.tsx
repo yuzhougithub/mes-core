@@ -12,7 +12,7 @@ import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import dayjs from 'dayjs'
 import { deleteMaterial, listMaterials, listUoms } from '../api/resources.ts'
-import { formatProblem, isStale, toApiError, type ApiError } from '../api/problem.ts'
+import { formatProblem, isAuthRedirect, isStale, toApiError, type ApiError } from '../api/problem.ts'
 import { getPlantEpoch } from '../api/plant-session.ts'
 import type { Material, Uom } from '../api/types.ts'
 import { usePlant } from '../plant/usePlant.ts'
@@ -90,7 +90,7 @@ function MaterialList() {
         setSettled({ key, rows: page.items, total: page.total, error: null })
       })
       .catch((err: unknown) => {
-        if (cancelled || isStale(err) || getPlantEpoch() !== epoch) return
+        if (cancelled || isStale(err) || isAuthRedirect(err) || getPlantEpoch() !== epoch) return
         setSettled({ key, rows: [], total: 0, error: toApiError(err) })
       })
     return () => {
@@ -107,7 +107,7 @@ function MaterialList() {
         setUoms(page.items)
       })
       .catch((err: unknown) => {
-        if (cancelled || isStale(err)) return
+        if (cancelled || isStale(err) || isAuthRedirect(err)) return
         setUoms([])
       })
     return () => {
@@ -146,7 +146,7 @@ function MaterialList() {
       setSelected([])
       setReloadToken((value) => value + 1)
     } catch (err) {
-      if (!isStale(err)) message.error(formatProblem(toApiError(err).problem))
+      if (!isStale(err) && !isAuthRedirect(err)) message.error(formatProblem(toApiError(err).problem))
     } finally {
       setActing(false)
     }
@@ -165,7 +165,7 @@ function MaterialList() {
       }
       setReloadToken((value) => value + 1)
     } catch (err) {
-      if (!isStale(err)) message.error(formatProblem(toApiError(err).problem))
+      if (!isStale(err) && !isAuthRedirect(err)) message.error(formatProblem(toApiError(err).problem))
     } finally {
       setActing(false)
     }
@@ -179,7 +179,7 @@ function MaterialList() {
       setSelected((current) => current.filter((id) => id !== row.id))
       setReloadToken((value) => value + 1)
     } catch (err) {
-      if (!isStale(err)) message.error(formatProblem(toApiError(err).problem))
+      if (!isStale(err) && !isAuthRedirect(err)) message.error(formatProblem(toApiError(err).problem))
     } finally {
       setActing(false)
     }

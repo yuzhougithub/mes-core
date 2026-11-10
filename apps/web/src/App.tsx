@@ -1,9 +1,8 @@
 import '@ant-design/v5-patch-for-react-19'
 import { App as AntdApp, ConfigProvider } from 'antd'
+import { AuthGate } from './auth/AuthGate.tsx'
 import { zhCN } from './locale.ts'
 import { BrandProvider } from './brand/BrandProvider.tsx'
-import { PlantProvider } from './plant/PlantProvider.tsx'
-import { AdminShell } from './shell/AdminShell.tsx'
 
 export default function App() {
   return (
@@ -20,9 +19,7 @@ export default function App() {
     >
       <AntdApp>
         <BrandProvider>
-          <PlantProvider>
-            <AdminShell />
-          </PlantProvider>
+          <AuthGate />
         </BrandProvider>
       </AntdApp>
     </ConfigProvider>

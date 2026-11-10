@@ -3,17 +3,67 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../App.tsx'
 import { resetPlantSession } from '../api/plant-session.ts'
+import { resetAuthSession, seedAuthSession } from '../auth/store.ts'
+import type { AuthSnapshot } from '../auth/types.ts'
 
 const PLANT_A = '00000000-0000-4000-8000-00000000000a'
 const PLANT_B = '00000000-0000-4000-8000-00000000000b'
 const UOM = '00000000-0000-4000-8000-0000000000c1'
 
+const USER = '00000000-0000-4000-8000-0000000000aa'
+
 afterEach(() => {
   cleanup()
+  resetAuthSession()
   resetPlantSession()
   sessionStorage.clear()
   vi.unstubAllGlobals()
 })
+
+function seedShell() {
+  const session: AuthSnapshot = {
+    phase: 'ready',
+    token: 'token-a',
+    notice: null,
+    me: {
+      user: {
+        id: USER,
+        username: 'admin',
+        status: 'ACTIVE',
+        superAdmin: true,
+        mustChangePassword: false,
+        permVersion: 1,
+      },
+      person: { id: '00000000-0000-4000-8000-0000000000bb', code: 'A001', name: '管理员' },
+      plant: { id: PLANT_A, code: 'P1', name: '一厂' },
+      plants: [
+        { id: PLANT_A, code: 'P1', name: '一厂', isDefault: true },
+        { id: PLANT_B, code: 'P2', name: '二厂', isDefault: false },
+      ],
+      roles: ['ADMIN'],
+      permissions: [],
+      menus: [],
+    },
+  }
+  seedAuthSession(session)
+}
+
+function switchBody(init?: RequestInit) {
+  const raw = typeof init?.body === 'string' ? init.body : '{}'
+  const parsed = JSON.parse(raw) as { plantId?: string }
+  const id = parsed.plantId ?? PLANT_A
+  return {
+    accessToken: `token-${id}`,
+    expiresIn: 1800,
+    mustChangePassword: false,
+    plant: {
+      id,
+      code: id === PLANT_B ? 'P2' : 'P1',
+      name: id === PLANT_B ? '二厂' : '一厂',
+    },
+    roles: ['ADMIN'],
+  }
+}
 
 function plant(id: string, code: string, name: string) {
   return {
@@ -49,6 +99,7 @@ function page(items: unknown[]) {
 
 describe('admin shell and material list', () => {
   it('shows the shell, disables unsupported actions, and queries only supported filters', async () => {
+    seedShell()
     const user = userEvent.setup()
     const calls: { url: string; plant: string | null }[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -79,7 +130,8 @@ describe('admin shell and material list', () => {
     expect((screen.getByTestId('btn-export') as HTMLButtonElement).disabled).toBe(true)
     expect(document.querySelector('[data-testid="filter-category"] .ant-select-disabled')).toBeTruthy()
     expect(document.querySelector('[data-testid="filter-created-range"] .ant-picker-disabled')).toBeTruthy()
-    expect(calls.some((call) => call.url.startsWith('/api/v1/plants') && call.plant === null)).toBe(true)
+    expect(screen.getByText('一厂（P1）')).toBeTruthy()
+    expect(calls.some((call) => call.url.startsWith('/api/v1/plants'))).toBe(false)
     expect(calls.some((call) => call.url.startsWith('/api/v1/materials') && call.plant === PLANT_A)).toBe(true)
 
     await user.type(screen.getByRole('textbox', { name: '关键词' }), '外壳')
@@ -91,13 +143,14 @@ describe('admin shell and material list', () => {
   })
 
   it('ignores a late response from the previous factory', async () => {
+    seedShell()
     const user = userEvent.setup()
     const lateA: { resolve: ((response: Response) => void) | null } = { resolve: null }
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       const plantHeader = new Headers(init?.headers).get('X-Plant-Id')
-      if (url.startsWith('/api/v1/plants')) {
-        return Promise.resolve(Response.json(page([plant(PLANT_A, 'P1', '一厂'), plant(PLANT_B, 'P2', '二厂')])))
+      if (url.startsWith('/api/v1/auth/switch-plant')) {
+        return Promise.resolve(Response.json(switchBody(init)))
       }
       if (url.startsWith('/api/v1/uoms')) {
         return Promise.resolve(Response.json(page([])))
@@ -125,6 +178,7 @@ describe('admin shell and material list', () => {
   })
 
   it('shows a loading state while the material list reloads', async () => {
+    seedShell()
     const user = userEvent.setup()
     let materialLists = 0
     const pendingList: { resolve: ((response: Response) => void) | null } = { resolve: null }
@@ -156,6 +210,7 @@ describe('admin shell and material list', () => {
   })
 
   it('shows the form after a failed material load is retried', async () => {
+    seedShell()
     const user = userEvent.setup()
     const detailId = '00000000-0000-4000-8000-0000000000a1'
     let detailCalls = 0

@@ -152,6 +152,13 @@ export const MODULES: NavModule[] = [
     label: '系统管理',
     items: [
       {
+        key: 'users',
+        label: '用户',
+        title: '用户',
+        subtitle: '维护账号、任职和默认工厂。',
+        breadcrumb: ['系统管理', '用户'],
+      },
+      {
         key: 'plants',
         label: '工厂',
         title: '工厂',
