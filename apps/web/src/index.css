@@ -470,6 +470,23 @@ body {
   width: 160px;
 }
 
+.mes-perm-code {
+  margin-right: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  font-weight: 400;
+}
+
+.mes-grant-tree {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  font-weight: 400;
+}
+
+.mes-grant-tree .ant-tree-title,
+.mes-grant-tree .ant-tree-node-content-wrapper {
+  font-weight: 400;
+}
+
 .mes-tools .mes-user-btn.ant-btn {
   width: auto;
   height: 32px;

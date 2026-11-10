@@ -12,6 +12,7 @@ import {
   resetPasswordChangeNotice,
   setAccessToken,
 } from './session.ts'
+import { normalizeMenus } from './menus.ts'
 import {
   NO_PLANT_ID,
   type AuthSnapshot,
@@ -237,17 +238,23 @@ export async function switchPlant(plantId: string): Promise<void> {
   }
   setAccessToken(token.accessToken)
   setActivePlant(plantId)
-  if (!snapshot.me || !token.plant) return
-  publish({
-    ...snapshot,
-    token: token.accessToken,
-    phase: 'ready',
-    me: {
-      ...snapshot.me,
-      plant: { id: token.plant.id, code: token.plant.code, name: token.plant.name },
-      roles: token.roles,
-    },
-  })
+  if (snapshot.me && token.plant) {
+    publish({
+      ...snapshot,
+      token: token.accessToken,
+      phase: 'ready',
+      me: {
+        ...snapshot.me,
+        plant: { id: token.plant.id, code: token.plant.code, name: token.plant.name },
+        roles: token.roles,
+      },
+    })
+  }
+  const me = await fetchMe()
+  if (getAccessToken() !== token.accessToken) return
+  const phase = getAuthSnapshot().phase
+  if (phase === 'anonymous' || phase === 'must-change') return
+  applyMe(me, token.accessToken)
 }
 
 /** After a no-plant admin assigns themselves, refresh replaces the sentinel token. */
@@ -298,7 +305,7 @@ function normalizeMe(body: unknown): MeResponse {
     plants: Array.isArray(record.plants) ? record.plants.map(normalizeOption).filter((item) => item.id !== '') : [],
     roles: stringList(record.roles),
     permissions: stringList(record.permissions),
-    menus: Array.isArray(record.menus) ? record.menus : [],
+    menus: normalizeMenus(record.menus),
   }
 }
 

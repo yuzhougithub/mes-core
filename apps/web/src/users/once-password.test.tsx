@@ -43,7 +43,7 @@ describe('one-time password', () => {
         plant: { id: PLANT, code: 'P1', name: '一厂' },
         plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
         roles: ['EDITOR'],
-        permissions: [],
+        permissions: ['sys:user:reset-pwd'],
         menus: [],
       },
     })

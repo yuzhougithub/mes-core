@@ -42,6 +42,20 @@ export type PlantOption = {
   isDefault: boolean
 }
 
+export type MeMenu = {
+  id: string
+  parentId: string | null
+  type: 'DIR' | 'MENU' | 'BUTTON'
+  name: string
+  permCode: string | null
+  path: string | null
+  component: string | null
+  icon: string | null
+  sortNo: number
+  visible: boolean
+  children: MeMenu[]
+}
+
 export type MeResponse = {
   user: MeUser
   person: MePerson | null
@@ -49,7 +63,7 @@ export type MeResponse = {
   plants: PlantOption[]
   roles: string[]
   permissions: string[]
-  menus: unknown[]
+  menus: MeMenu[]
 }
 
 export type AuthPhase = 'booting' | 'anonymous' | 'must-change' | 'no-plant' | 'ready'

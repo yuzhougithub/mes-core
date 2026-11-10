@@ -1,10 +1,9 @@
 import { Button, Card, Tooltip } from 'antd'
-import type { NavItem } from './nav.ts'
 
-export function Placeholder({ item }: { item: NavItem }) {
+export function Placeholder({ message }: { message: string }) {
   return (
     <Card>
-      <p className="mes-placeholder">{item.placeholder}</p>
+      <p className="mes-placeholder">{message}</p>
       <Tooltip title="即将上线">
         <span className="mes-soon">
           <Button disabled>即将上线</Button>
