@@ -44,6 +44,37 @@ npm run dev
 
 打开 <http://localhost:5173>。开发服务器把 `/api`、`/actuator`、`/v3`、`/swagger-ui` 代理到 `localhost:8080`。
 
+## 品牌：logo 与系统名
+
+顶栏 logo、系统名和可选副标题在浏览器运行时读取，不写死在界面里。默认系统名是「MES 制造执行系统」，副标题默认为空，logo 默认为 `/favicon.svg`。
+
+每个字段按这个顺序取值：
+
+1. 站点上的 `/config.json`（部署后替换这个文件即可，不必重新构建前端）
+2. 构建期环境变量 `VITE_APP_NAME`、`VITE_APP_LOGO`、`VITE_APP_SUBTITLE`（只填补配置文件里没有或无效的字段）
+3. 上面的内置默认值
+
+`apps/web/public/config.json` 会原样进到构建产物。本地直接改这个文件；用 nginx 或镜像时，用同名文件覆盖 `config.json`。页面加载时以 `cache: no-store` 请求它，文件读失败或字段无效就回退，不阻断页面。
+
+```json
+{
+  "name": "华东精工 MES",
+  "logo": "/brand/logo.svg",
+  "subtitle": ""
+}
+```
+
+- `name`：纯文本。空字符串视为无效并回退。内容按文本显示，不会当成 HTML 执行。
+- `subtitle`：纯文本，可以是空字符串。配置里写了空字符串就保持为空，不会再去用环境变量。
+- `logo`：以 `/` 开头的站内路径（不能是 `//`），或 `http`/`https` 地址。`javascript:` 和其他写法会丢弃并改用默认 logo。把图片放到 `apps/web/public/`（例如 `public/brand/logo.svg`），`logo` 填 `/brand/logo.svg`。
+
+环境变量示例（构建前）：
+
+```bash
+VITE_APP_NAME="华东精工 MES" VITE_APP_LOGO="/brand/logo.svg" VITE_APP_SUBTITLE="" npm run build
+```
+
+
 ## 只编译
 
 API 测试会连接上面的 PostgreSQL。可先 `docker compose -f deploy/docker-compose.yml up -d postgres`，或本机自建同名库。
