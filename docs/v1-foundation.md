@@ -90,7 +90,7 @@
 - 改 `perm_code` 或删除后，持有相关角色的用户权限版本 `ver` 加一。停用父节点时，持有其子孙菜单的用户同样 `ver` 加一。
 - 后端代码里 `@RequiresPerm` 用到但库中不存在的 `perm_code`，启动时告警（不失败），便于发现菜单被误删。
 
-权限点编码 `模块:资源:动作`，全小写，例 `md:material:list`、`md:material:create`、`md:material:update`、`md:material:delete`、`md:material:release`、`md:material:import`、`md:material:export`、`sys:user:reset-pwd`。动作集合固定为 `list / view / create / update / delete / enable / release / obsolete / import / export`，特殊动作单列。种子角色：`ADMIN`（全部权限点，数据范围 `PLANT`）、`EDITOR`、`VIEWER`，与原三档语义一致。`super_admin = true` 的用户跳过功能和数据权限，种子一个 `admin`，`must_change_pwd = true`。
+权限点编码 `模块:资源:动作`，全小写，例 `md:material:list`、`md:material:create`、`md:material:update`、`md:material:delete`、`md:material:release`、`md:material:import`、`md:material:export`、`sys:user:reset-pwd`。动作集合固定为 `list / view / create / update / delete / enable / release / obsolete / import / export`，特殊动作单列。种子角色：`ADMIN`（除 `@RequiresPerm(global = true)` 对应的全局写权限点外的全部权限点，数据范围 `PLANT`）、`EDITOR`、`VIEWER`，与原三档语义一致。`super_admin = true` 的用户跳过功能和数据权限，种子一个 `admin`，`must_change_pwd = true`。
 
 ### 3.4 系统配置与日志
 
@@ -122,7 +122,7 @@
 ### 4.2 功能权限
 
 - 后端：Controller 方法标 `@RequiresPerm("md:material:update")`（可多个，`anyOf`）。没有该注解且不在白名单（登录、健康检查）的接口启动时报错，防止漏标【假设 F5】。不满足 → 403 `PERMISSION_DENIED`，返回所需权限点编码。
-- **全局资源只允许超级管理员写**（F2）。`@RequiresPerm(global = true)` 的接口，非超级管理员一律 403，即使当前厂角色持有该权限点。已标 `global` 的写操作：工厂的创建 / 修改 / 删除；菜单的创建 / 修改 / 删除；角色定义的创建 / 修改 / 删除（含启用与停用）；`PUT /roles/{id}/menus`。厂级管理员仍可在本厂把**已有**角色授给其他用户（`POST /users`、`PUT /users/{id}/plants`）。此时每个角色的全部权限点必须是操作者在当前厂所持权限点的子集；非超级管理员改角色菜单时，除 `DIR` 外每个所选节点的 `perm_code` 也必须落在自己的权限内。超出 → 403 `PERMISSION_DENIED`。`header` 模式（仅 dev/test）仍视为完全访问，包含这些全局写操作。
+- **全局资源只允许超级管理员写**（F2）。`@RequiresPerm(global = true)` 的接口，非超级管理员一律 403，即使当前厂角色持有该权限点。已标 `global` 的写操作：工厂的创建 / 修改 / 删除；菜单的创建 / 修改 / 删除；角色定义的创建 / 修改 / 删除（含启用与停用）；`PUT /roles/{id}/menus`。厂级管理员仍可在本厂把**已有**角色授给其他用户（`POST /users`、`PUT /users/{id}/plants`）。此时每个角色的全部权限点必须是操作者在当前厂所持权限点的子集；非超级管理员改角色菜单时，除 `DIR` 外每个所选节点的 `perm_code` 也必须落在自己的权限内。超出 → 403 `PERMISSION_DENIED`。`header` 模式（仅 dev/test）仍视为完全访问，包含这些全局写操作。厂级 `ADMIN` 种子不含这些权限点。`GET /auth/me` 对非超级管理员也不返回它们。`/api/v1/plants`、`/api/v1/menus`、`/api/v1/roles` 下的 `POST` / `PUT` / `PATCH` / `DELETE` 未标 `global = true` 时启动失败。
 - 前端：登录后取 `GET /auth/me`，拿到菜单树和权限点集合；路由按菜单生成；按钮用 `<Perm code="…">` 包裹，无权限不渲染（不是置灰）。前端只做体验，后端是唯一裁决。
 
 ### 4.3 数据权限
