@@ -1,6 +1,7 @@
 package com.xihua.mes.system;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,14 +9,22 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MvcResult;
@@ -23,6 +32,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.xihua.mes.auth.WriteEndpointGuard;
 import com.xihua.mes.support.PgIntegrationTest;
 
 import tools.jackson.databind.JsonNode;
@@ -36,13 +46,19 @@ import tools.jackson.databind.JsonNode;
 })
 class MenuRolePermMvcTest extends PgIntegrationTest {
 
+    private static final String UOM_MENU = "00000000-0000-4000-8000-00000000f220";
     private static final String UOM_CREATE = "00000000-0000-4000-8000-00000000f222";
+    private static final String USER_GRANT = "00000000-0000-4000-8000-00000000f267";
+    private static final String ROLE_GRANT = "00000000-0000-4000-8000-00000000f275";
 
     @Autowired
     private JdbcTemplate jdbc;
 
     @Autowired
     private PlatformTransactionManager transactions;
+
+    @Autowired
+    private ObjectProvider<RequestMappingHandlerMapping> mappings;
 
     @Value("${mes.auth.admin.initial-password}")
     private String initialPassword;
@@ -310,6 +326,114 @@ class MenuRolePermMvcTest extends PgIntegrationTest {
                         .content("{\"menuIds\":[\"" + UOM_CREATE + "\"]}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void cannotGrantAPermissionTheCallerDoesNotHold() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String grantRole = createRole(adminToken, "EDITOR_GRANT");
+        mvc.perform(bearer(put("/api/v1/roles/" + grantRole + "/menus"), adminToken)
+                        .content("{\"menuIds\":[\"" + ROLE_GRANT + "\",\"" + UOM_MENU + "\"]}"))
+                .andExpect(status().isOk());
+        Account caller = account(admin.plantId(), false, grantRole);
+        String target = createRole(adminToken, "ESCALATE");
+        mvc.perform(bearer(put("/api/v1/roles/" + target + "/menus"), token(caller))
+                        .content("{\"menuIds\":[\"" + USER_GRANT + "\"]}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void cannotAssignARoleBeyondOwnPermissions() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String grantRole = createRole(adminToken, "PLANTER");
+        mvc.perform(bearer(put("/api/v1/roles/" + grantRole + "/menus"), adminToken)
+                        .content("{\"menuIds\":[\"" + USER_GRANT + "\",\"" + UOM_MENU + "\"]}"))
+                .andExpect(status().isOk());
+        Account caller = account(admin.plantId(), false, grantRole);
+        Account target = account(admin.plantId(), false);
+        mvc.perform(bearer(put("/api/v1/users/" + target.userId() + "/plants"), token(caller))
+                        .content("""
+                                {"lockVersion":0,"plants":[{"plantId":"%s","isDefault":true,"roleIds":["%s"]}]}
+                                """.formatted(admin.plantId(), roleId("ADMIN"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void disabledParentTurnsOffDescendantPermissions() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String roleId = createRole(adminToken, "UOM_ONLY");
+        mvc.perform(bearer(put("/api/v1/roles/" + roleId + "/menus"), adminToken)
+                        .content("{\"menuIds\":[\"" + UOM_CREATE + "\"]}"))
+                .andExpect(status().isOk());
+        Account user = account(admin.plantId(), false, roleId);
+        String userToken = token(user);
+        mvc.perform(bearer(post("/api/v1/uoms"), userToken).content(uomJson()))
+                .andExpect(status().isCreated());
+
+        JsonNode menu = body(mvc.perform(bearer(get("/api/v1/menus/" + UOM_MENU), adminToken))
+                .andExpect(status().isOk())
+                .andReturn());
+        int lock = menu.get("lockVersion").asInt();
+        try {
+            JsonNode disabled = body(mvc.perform(bearer(put("/api/v1/menus/" + UOM_MENU), adminToken)
+                            .content(menuWrite(menu, false, lock)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            lock = disabled.get("lockVersion").asInt();
+            mvc.perform(bearer(post("/api/v1/uoms"), userToken).content(uomJson()))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        } finally {
+            mvc.perform(bearer(put("/api/v1/menus/" + UOM_MENU), adminToken)
+                            .content(menuWrite(menu, true, lock)))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void everyRequiresPermCodeIsSeeded() {
+        Map<RequestMappingInfo, HandlerMethod> all = new LinkedHashMap<>();
+        mappings.orderedStream().forEach(mapping -> all.putAll(mapping.getHandlerMethods()));
+        Set<String> declared = WriteEndpointGuard.declaredPerms(all);
+        assertThat(declared).isNotEmpty();
+        assertThat(jdbc.queryForList(
+                "SELECT perm_code FROM sys_menu WHERE perm_code IS NOT NULL AND NOT deleted", String.class))
+                .containsAll(declared);
+    }
+
+    @Test
+    void menuCycleIsRejectedByTheDatabase() {
+        UUID left = UUID.randomUUID();
+        UUID right = UUID.randomUUID();
+        assertThrows(DataIntegrityViolationException.class, () -> new TransactionTemplate(transactions)
+                .executeWithoutResult(status -> {
+                    jdbc.update("INSERT INTO sys_menu (id, type, name) VALUES (?, 'DIR', ?)", left, "环A");
+                    jdbc.update("INSERT INTO sys_menu (id, parent_id, type, name) VALUES (?, ?, 'DIR', ?)",
+                            right, left, "环B");
+                    jdbc.update("UPDATE sys_menu SET parent_id = ? WHERE id = ?", right, left);
+                }));
+    }
+
+    private String createRole(String token, String code) throws Exception {
+        return body(mvc.perform(bearer(post("/api/v1/roles"), token)
+                        .content("{\"code\":\"" + code + "\",\"name\":\"" + code + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asString();
+    }
+
+    private static String menuWrite(JsonNode menu, boolean enabled, int lockVersion) {
+        String parent = menu.get("parentId").isNull() ? "null" : "\"" + menu.get("parentId").asString() + "\"";
+        return """
+                {"type":"%s","parentId":%s,"name":"%s","permCode":"%s","path":"%s","component":"%s",
+                 "enabled":%s,"lockVersion":%d}
+                """.formatted(menu.get("type").asString(), parent, menu.get("name").asString(),
+                menu.get("permCode").asString(), menu.get("path").asString(), menu.get("component").asString(),
+                enabled, lockVersion);
     }
 
     private String uom(String token) throws Exception {

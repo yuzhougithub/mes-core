@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,12 +35,22 @@ public class MenuService {
     private static final Set<String> TYPES = Set.of("DIR", "MENU", "BUTTON");
     private static final UUID NIL = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
+    private static final String TREE_LOCK =
+            "SELECT pg_advisory_xact_lock(hashtext('sys_menu_tree')::bigint)";
+
     private final MenuMapper menus;
     private final PermVersions versions;
+    private final JdbcTemplate jdbc;
 
-    public MenuService(MenuMapper menus, PermVersions versions) {
+    public MenuService(MenuMapper menus, PermVersions versions, JdbcTemplate jdbc) {
         this.menus = menus;
         this.versions = versions;
+        this.jdbc = jdbc;
+    }
+
+    /** Held until commit, and taken before any ancestor read in this transaction. */
+    private void lockTree() {
+        jdbc.execute(TREE_LOCK);
     }
 
     public List<MenuNode> tree() {
@@ -52,6 +63,7 @@ public class MenuService {
 
     @Transactional
     public MenuNode create(MenuWrite req) {
+        lockTree();
         requireBody(req);
         Draft draft = draft(req, null, true);
         validate(draft, null);
@@ -66,6 +78,7 @@ public class MenuService {
 
     @Transactional
     public MenuNode update(UUID id, MenuWrite req) {
+        lockTree();
         requireBody(req);
         SysMenu row = require(id);
         Locks.check(req.lockVersion(), row.getLockVersion());
@@ -87,6 +100,7 @@ public class MenuService {
 
     @Transactional
     public void delete(UUID id, Integer lockVersion) {
+        lockTree();
         SysMenu row = require(id);
         Locks.check(lockVersion, row.getLockVersion());
         if (menus.childCount(id) > 0) {

@@ -44,7 +44,7 @@ public class PlantController {
     }
 
     @PostMapping
-    @RequiresPerm("org:plant:create")
+    @RequiresPerm(value = "org:plant:create", global = true)
     public ResponseEntity<PlantView> create(@RequestBody PlantCreate req) {
         PlantView view = service.create(req);
         return ResponseEntity.created(URI.create("/api/v1/plants/" + view.id())).body(view);
@@ -57,13 +57,13 @@ public class PlantController {
     }
 
     @PutMapping("/{id}")
-    @RequiresPerm("org:plant:update")
+    @RequiresPerm(value = "org:plant:update", global = true)
     public PlantView update(@PathVariable UUID id, @RequestBody PlantUpdate req) {
         return service.update(id, req);
     }
 
     @DeleteMapping("/{id}")
-    @RequiresPerm("org:plant:delete")
+    @RequiresPerm(value = "org:plant:delete", global = true)
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         service.delete(id, lockVersion);
         return ResponseEntity.noContent().build();

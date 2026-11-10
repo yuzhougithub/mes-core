@@ -4,9 +4,11 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -54,6 +56,7 @@ public class UserService {
     private final PersonAccountService accounts;
     private final RefreshTokenMapper refreshTokens;
     private final UserAdminGuard guard;
+    private final PermissionService permissions;
     private final PasswordEncoder encoder;
     private final SecurityPolicyService policies;
     private final Clock clock;
@@ -64,6 +67,7 @@ public class UserService {
             PersonAccountService accounts,
             RefreshTokenMapper refreshTokens,
             UserAdminGuard guard,
+            PermissionService permissions,
             PasswordEncoder encoder,
             SecurityPolicyService policies,
             Clock clock) {
@@ -72,6 +76,7 @@ public class UserService {
         this.accounts = accounts;
         this.refreshTokens = refreshTokens;
         this.guard = guard;
+        this.permissions = permissions;
         this.encoder = encoder;
         this.policies = policies;
         this.clock = clock;
@@ -144,6 +149,7 @@ public class UserService {
             throw ApiException.permissionDenied("sys:user:grant");
         }
         List<AssignmentDraft> createPlants = drafts(req.plants());
+        permissions.requireRolesWithinCaller(roleIdsOf(createPlants));
         if (!guard.superAdmin()) {
             UUID current = CurrentContext.requirePlantUuid();
             if (createPlants.size() != 1 || createPlants.get(0).plantId() == null
@@ -300,6 +306,7 @@ public class UserService {
         }
         Locks.check(req.lockVersion(), user.getLockVersion());
         List<AssignmentDraft> submitted = drafts(req.plants());
+        permissions.requireRolesWithinCaller(roleIdsOf(submitted));
         UUID defaultPlant;
         if (guard.superAdmin()) {
             defaultPlant = accounts.replaceAssignments(user.getPersonId(), submitted);
@@ -383,6 +390,21 @@ public class UserService {
             people.put(person.getId(), person);
         }
         return people;
+    }
+
+    private static Set<UUID> roleIdsOf(List<AssignmentDraft> drafts) {
+        Set<UUID> ids = new HashSet<>();
+        for (AssignmentDraft draft : drafts) {
+            if (draft.roleIds() == null) {
+                continue;
+            }
+            for (UUID roleId : draft.roleIds()) {
+                if (roleId != null) {
+                    ids.add(roleId);
+                }
+            }
+        }
+        return ids;
     }
 
     private List<AssignmentDraft> drafts(List<PlantBindingInput> plants) {

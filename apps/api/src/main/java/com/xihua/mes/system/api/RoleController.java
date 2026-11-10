@@ -43,7 +43,7 @@ public class RoleController {
     }
 
     @PostMapping
-    @RequiresPerm("sys:role:create")
+    @RequiresPerm(value = "sys:role:create", global = true)
     public ResponseEntity<RoleView> create(@RequestBody(required = false) RoleCreate req) {
         RoleView created = roles.create(req);
         return ResponseEntity.created(URI.create("/api/v1/roles/" + created.id())).body(created);
@@ -56,13 +56,13 @@ public class RoleController {
     }
 
     @PutMapping("/{id}")
-    @RequiresPerm("sys:role:update")
+    @RequiresPerm(value = "sys:role:update", global = true)
     public RoleView update(@PathVariable UUID id, @RequestBody(required = false) RoleUpdate req) {
         return roles.update(id, req);
     }
 
     @DeleteMapping("/{id}")
-    @RequiresPerm("sys:role:delete")
+    @RequiresPerm(value = "sys:role:delete", global = true)
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         roles.delete(id, lockVersion);
         return ResponseEntity.noContent().build();
@@ -75,7 +75,7 @@ public class RoleController {
     }
 
     @PutMapping("/{id}/menus")
-    @RequiresPerm("sys:role:grant")
+    @RequiresPerm(value = "sys:role:grant", global = true)
     public RoleMenus replaceMenus(@PathVariable UUID id, @RequestBody(required = false) RoleMenus req) {
         return new RoleMenus(roles.replaceMenus(id, req));
     }

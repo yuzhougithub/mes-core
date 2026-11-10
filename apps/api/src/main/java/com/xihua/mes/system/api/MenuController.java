@@ -43,20 +43,20 @@ public class MenuController {
     }
 
     @PostMapping
-    @RequiresPerm("sys:menu:create")
+    @RequiresPerm(value = "sys:menu:create", global = true)
     public ResponseEntity<MenuNode> create(@RequestBody(required = false) MenuWrite req) {
         MenuNode created = menus.create(req);
         return ResponseEntity.created(URI.create("/api/v1/menus/" + created.id())).body(created);
     }
 
     @PutMapping("/{id}")
-    @RequiresPerm("sys:menu:update")
+    @RequiresPerm(value = "sys:menu:update", global = true)
     public MenuNode update(@PathVariable UUID id, @RequestBody(required = false) MenuWrite req) {
         return menus.update(id, req);
     }
 
     @DeleteMapping("/{id}")
-    @RequiresPerm("sys:menu:delete")
+    @RequiresPerm(value = "sys:menu:delete", global = true)
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         menus.delete(id, lockVersion);
         return ResponseEntity.noContent().build();

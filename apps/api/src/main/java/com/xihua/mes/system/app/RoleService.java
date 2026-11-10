@@ -1,6 +1,5 @@
 package com.xihua.mes.system.app;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -16,6 +15,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.xihua.mes.auth.CurrentContext;
 import com.xihua.mes.auth.PermVersions;
+import com.xihua.mes.auth.PermissionService;
+import com.xihua.mes.auth.PermissionService.MenuGrant;
 import com.xihua.mes.auth.UserAdminGuard;
 import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
@@ -47,6 +48,7 @@ public class RoleService {
     private final RoleMenuMapper roleMenus;
     private final MenuMapper menus;
     private final PermVersions versions;
+    private final PermissionService permissions;
     private final UserAdminGuard guard;
 
     public RoleService(
@@ -54,11 +56,13 @@ public class RoleService {
             RoleMenuMapper roleMenus,
             MenuMapper menus,
             PermVersions versions,
+            PermissionService permissions,
             UserAdminGuard guard) {
         this.roles = roles;
         this.roleMenus = roleMenus;
         this.menus = menus;
         this.versions = versions;
+        this.permissions = permissions;
         this.guard = guard;
     }
 
@@ -165,16 +169,14 @@ public class RoleService {
         }
         List<UUID> menuIds = req.menuIds() == null ? List.of() : req.menuIds().stream()
                 .filter(Objects::nonNull).distinct().toList();
-        if (!menuIds.isEmpty()) {
-            Set<UUID> found = new HashSet<>();
-            for (SysMenu menu : menus.selectByIds(menuIds)) {
-                found.add(menu.getId());
-            }
-            if (found.size() != menuIds.size()) {
-                throw ApiException.validation(List.of(
-                        new FieldError("menuIds", ErrorCodes.INVALID_VALUE, "菜单不存在")));
-            }
+        List<SysMenu> selected = menuIds.isEmpty() ? List.of() : menus.selectByIds(menuIds);
+        if (selected.size() != menuIds.size()) {
+            throw ApiException.validation(List.of(
+                    new FieldError("menuIds", ErrorCodes.INVALID_VALUE, "菜单不存在")));
         }
+        permissions.requireMenusWithinCaller(selected.stream()
+                .map(menu -> new MenuGrant(menu.getType(), menu.getPermCode()))
+                .toList());
         roleMenus.deleteByRole(id);
         UUID actor = CurrentContext.userUuid();
         for (UUID menuId : menuIds) {

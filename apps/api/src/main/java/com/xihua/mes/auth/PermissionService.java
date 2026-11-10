@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,7 +60,90 @@ public class PermissionService implements PermVersions {
         if (perm == null || perm.value().length == 0) {
             return;
         }
+        if (perm.global()) {
+            requireGlobal(perm.value()[0]);
+            return;
+        }
         require(perm.anyOf(), perm.value());
+    }
+
+    /**
+     * Non-superadmin menu grant: every selected node's {@code perm_code} must already be held
+     * in the current plant. {@code DIR} nodes carry no permission and are exempt.
+     */
+    public void requireMenusWithinCaller(Collection<MenuGrant> selected) {
+        if (selected == null || selected.isEmpty() || callerUnrestricted()) {
+            return;
+        }
+        Set<String> mine = callerPerms();
+        for (MenuGrant menu : selected) {
+            if (menu == null || "DIR".equals(menu.type()) || menu.permCode() == null) {
+                continue;
+            }
+            if (!mine.contains(menu.permCode())) {
+                throw ApiException.permissionDenied(menu.permCode());
+            }
+        }
+    }
+
+    /**
+     * Non-superadmin role assignment: each role's permission points must be a subset of the
+     * caller's permissions in the current plant.
+     */
+    public void requireRolesWithinCaller(Collection<UUID> roleIds) {
+        if (roleIds == null || roleIds.isEmpty() || callerUnrestricted()) {
+            return;
+        }
+        Set<String> mine = callerPerms();
+        for (UUID roleId : roleIds) {
+            if (roleId == null) {
+                continue;
+            }
+            for (String code : mapper.rolePermCodes(roleId)) {
+                if (!mine.contains(code)) {
+                    throw ApiException.permissionDenied(code);
+                }
+            }
+        }
+    }
+
+    private void requireGlobal(String code) {
+        if (headerMode) {
+            return;
+        }
+        UUID userId = CurrentContext.userUuid();
+        if (userId == null) {
+            throw ApiException.permissionDenied(code);
+        }
+        UserPermState state = mapper.userState(userId);
+        if (state == null || !Boolean.TRUE.equals(state.getSuperAdmin())) {
+            throw ApiException.permissionDenied(code);
+        }
+    }
+
+    private boolean callerUnrestricted() {
+        if (headerMode) {
+            return true;
+        }
+        UUID userId = CurrentContext.userUuid();
+        if (userId == null) {
+            return false;
+        }
+        UserPermState state = mapper.userState(userId);
+        return state != null && Boolean.TRUE.equals(state.getSuperAdmin());
+    }
+
+    /** Codes linked to the caller's roles in the current plant, including ones a disabled parent turns off. */
+    private Set<String> callerPerms() {
+        UUID personId = CurrentContext.personUuid();
+        UUID plantId = CurrentContext.requirePlantUuid();
+        if (personId == null || NoPlant.ID.equals(plantId)) {
+            return Set.of();
+        }
+        return Set.copyOf(mapper.heldPermCodes(personId, plantId));
+    }
+
+    public record MenuGrant(String type, String permCode) {
     }
 
     /** Shared master-data writes ({@code plant_id} null) need {@link PermCodes#SHARED_WRITE}. */
@@ -151,8 +235,55 @@ public class PermissionService implements PermVersions {
             if (personId == null) {
                 return new Snapshot(Set.of());
             }
-            return new Snapshot(Set.copyOf(mapper.permCodes(personId, plantId)));
+            return new Snapshot(effective(mapper.permCodes(personId, plantId), mapper.menus()));
         });
+    }
+
+    /**
+     * A permission point is effective only while the menu and every ancestor are enabled.
+     * A disabled parent therefore turns off its descendant buttons.
+     */
+    static Set<String> effective(Collection<String> granted, List<MenuRow> rows) {
+        if (granted == null || granted.isEmpty()) {
+            return Set.of();
+        }
+        Map<UUID, MenuRow> byId = new HashMap<>();
+        Map<String, MenuRow> byCode = new HashMap<>();
+        for (MenuRow row : rows) {
+            byId.put(row.getId(), row);
+            if (row.getPermCode() != null) {
+                byCode.put(row.getPermCode(), row);
+            }
+        }
+        Set<String> kept = new HashSet<>();
+        for (String code : granted) {
+            MenuRow row = byCode.get(code);
+            if (row != null && ancestorsEnabled(row, byId)) {
+                kept.add(code);
+            }
+        }
+        return Set.copyOf(kept);
+    }
+
+    static boolean ancestorsEnabled(MenuRow row, Map<UUID, MenuRow> byId) {
+        MenuRow current = row;
+        Set<UUID> seen = new HashSet<>();
+        while (current != null) {
+            if (!Boolean.TRUE.equals(current.getEnabled())) {
+                return false;
+            }
+            if (!seen.add(current.getId())) {
+                return false;
+            }
+            if (current.getParentId() == null) {
+                return true;
+            }
+            current = byId.get(current.getParentId());
+            if (current == null) {
+                return false;
+            }
+        }
+        return false;
     }
 
     private static int version(UserPermState state) {
