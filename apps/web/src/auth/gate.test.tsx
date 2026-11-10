@@ -160,7 +160,7 @@ describe('forced password change', () => {
     expect(screen.queryByText('物料主数据')).toBeNull()
   })
 
-  it('uses the username from /auth/me when checking a new password', async () => {
+  it('checks the login username and does not call /auth/me', async () => {
     const user = userEvent.setup()
     const calls: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -184,29 +184,11 @@ describe('forced password change', () => {
           roles: [],
         })
       }
-      if (url === '/api/v1/auth/me') {
-        return Response.json({
-          user: {
-            id: '00000000-0000-4000-8000-0000000000c1',
-            username: 'zhang',
-            status: 'ACTIVE',
-            superAdmin: false,
-            mustChangePassword: true,
-            permVersion: 1,
-          },
-          person: { id: '00000000-0000-4000-8000-0000000000c2', code: 'Z001', name: '张三' },
-          plant: { id: PLANT, code: 'P1', name: '一厂' },
-          plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
-          roles: [],
-          permissions: [],
-          menus: [],
-        })
-      }
       return Response.json({ title: 'missing', status: 404, detail: url, code: 'NOT_FOUND', errors: [] }, { status: 404 })
     }))
 
     render(<App />)
-    await user.type(await screen.findByLabelText('用户名'), 'admin')
+    await user.type(await screen.findByLabelText('用户名'), 'zhang')
     await user.type(screen.getByLabelText('密码'), 'OldPassw0rd!')
     await user.click(screen.getByRole('button', { name: '登录' }))
     await user.type(await screen.findByLabelText('当前密码'), 'OldPassw0rd!')
@@ -214,7 +196,7 @@ describe('forced password change', () => {
     await user.type(screen.getByLabelText('确认新密码'), 'Zhang-aa1!')
     await user.click(screen.getByRole('button', { name: '更新密码' }))
     expect(await screen.findByText('密码不能包含用户名')).toBeTruthy()
-    expect(calls.some((call) => call.includes('/api/v1/auth/me'))).toBe(true)
+    expect(calls.some((call) => call.includes('/api/v1/auth/me'))).toBe(false)
     expect(calls.some((call) => call.includes('/api/v1/auth/change-password'))).toBe(false)
   })
 

@@ -9,6 +9,7 @@ let refreshInflight: Promise<TokenResponse | null> | null = null
 const lostListeners = new Set<() => void>()
 const refreshedListeners = new Set<(token: TokenResponse) => void>()
 const passwordChangeListeners = new Set<() => void>()
+let passwordChangeNotified = false
 
 export function getAccessToken(): string | null {
   return accessToken
@@ -40,7 +41,13 @@ export function onPasswordChangeRequired(listener: () => void): () => void {
 }
 
 export function emitPasswordChangeRequired(): void {
+  if (passwordChangeNotified) return
+  passwordChangeNotified = true
   for (const listener of passwordChangeListeners) listener()
+}
+
+export function resetPasswordChangeNotice(): void {
+  passwordChangeNotified = false
 }
 
 /** Header method required on cookie-authenticated refresh and logout. A readable CSRF cookie is forwarded too. */
@@ -117,6 +124,7 @@ async function refreshOnce(): Promise<TokenResponse | null> {
 
 export function endSession(): void {
   accessToken = null
+  resetPasswordChangeNotice()
   for (const listener of lostListeners) listener()
 }
 

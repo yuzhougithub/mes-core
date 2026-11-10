@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAccessToken, onSessionLost, setAccessToken } from '../auth/session.ts'
+import { endSession, getAccessToken, onPasswordChangeRequired, onSessionLost, setAccessToken } from '../auth/session.ts'
 import { apiRequest } from './http.ts'
 import { ApiError, StalePlantResponse } from './problem.ts'
 import { getPlantId, resetPlantSession, setActivePlant } from './plant-session.ts'
 
 afterEach(() => {
   resetPlantSession()
-  setAccessToken(null)
+  endSession()
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
   vi.unstubAllGlobals()
 })
@@ -166,6 +166,27 @@ describe('apiRequest', () => {
     await Promise.all([first, second])
     expect(refreshStarts).toBe(1)
     expect(retried).toEqual(['Bearer new-token', 'Bearer new-token'])
+  })
+
+  it('notifies password-change required only once', async () => {
+    setAccessToken('token')
+    const notify = vi.fn()
+    const stop = onPasswordChangeRequired(notify)
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      title: '请先修改密码',
+      status: 403,
+      detail: '请先修改密码',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+      errors: [],
+    }, 403)))
+    await expect(apiRequest('/api/v1/auth/me', { plant: false })).rejects.toMatchObject({
+      problem: { code: 'PASSWORD_CHANGE_REQUIRED' },
+    })
+    await expect(apiRequest('/api/v1/users', { plant: false })).rejects.toMatchObject({
+      problem: { code: 'PASSWORD_CHANGE_REQUIRED' },
+    })
+    expect(notify).toHaveBeenCalledTimes(1)
+    stop()
   })
 
   it('drops the session when refresh fails and does not retry forever', async () => {

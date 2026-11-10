@@ -9,6 +9,7 @@ import {
   onSessionRefreshed,
   parseToken,
   refreshAccess,
+  resetPasswordChangeNotice,
   setAccessToken,
 } from './session.ts'
 import {
@@ -28,6 +29,12 @@ let snapshot: AuthSnapshot = {
   token: null,
   me: null,
   notice: null,
+}
+
+let pendingUsername = ''
+
+export function getPendingUsername(): string {
+  return pendingUsername
 }
 
 function emit(): void {
@@ -52,6 +59,7 @@ function usablePlantId(id: string | null | undefined): string | null {
 
 function publish(next: AuthSnapshot): void {
   snapshot = next
+  if (next.phase !== 'must-change') resetPasswordChangeNotice()
   emit()
 }
 
@@ -64,11 +72,13 @@ function applyMe(me: MeResponse, token: string | null): void {
 }
 
 onSessionLost(() => {
+  pendingUsername = ''
   setActivePlant(null)
   publish({ phase: 'anonymous', token: null, me: null, notice: null })
 })
 
 onPasswordChangeRequired(() => {
+  if (snapshot.phase === 'must-change') return
   publish({
     phase: 'must-change',
     token: getAccessToken(),
@@ -131,28 +141,9 @@ export async function restoreSession(isCancelled: () => boolean): Promise<void> 
   }
 }
 
-let accountNameLoad: Promise<string> | null = null
-
-/** Username for the forced-password check. `/auth/me` is the source. */
-export function loadAccountName(): Promise<string> {
-  const known = snapshot.me?.user.username
-  if (known) return Promise.resolve(known)
-  if (!getAccessToken()) return Promise.resolve('')
-  if (!accountNameLoad) {
-    accountNameLoad = fetchMe()
-      .then((me) => {
-        if (getAuthSnapshot().phase === 'must-change') publish({ ...getAuthSnapshot(), me })
-        return me.user.username ?? ''
-      })
-      .catch(() => getAuthSnapshot().me?.user.username ?? '')
-      .finally(() => {
-        accountNameLoad = null
-      })
-  }
-  return accountNameLoad
-}
-
 export async function login(username: string, password: string): Promise<void> {
+  pendingUsername = username.trim().toLowerCase()
+  resetPasswordChangeNotice()
   let response: Response
   try {
     response = await fetch('/api/v1/auth/login', {
@@ -208,12 +199,14 @@ export async function login(username: string, password: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  pendingUsername = ''
   await logoutRequest()
   setActivePlant(null)
   publish({ phase: 'anonymous', token: null, me: null, notice: null })
 }
 
 export function finishPasswordChange(): void {
+  pendingUsername = ''
   setAccessToken(null)
   setActivePlant(null)
   publish({ phase: 'anonymous', token: null, me: null, notice: '密码已更新，请重新登录' })
