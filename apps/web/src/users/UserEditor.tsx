@@ -10,6 +10,7 @@ import {
   type PlantBindingInput,
   type UserDetail,
 } from '../api/users.ts'
+import { listAllRoles, type Role } from '../api/roles.ts'
 import { maskEmail, maskMobile } from '../auth/mask.ts'
 import { passwordProblems } from '../auth/password.ts'
 
@@ -26,6 +27,7 @@ type BindingDraft = {
   isDefault: boolean
   active: boolean
   jobTitle: string
+  roleIds: string[]
 }
 
 type Props = {
@@ -57,7 +59,24 @@ export function UserEditor(props: Props) {
   const [error, setError] = useState<ApiError | null>(null)
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [bindings, setBindings] = useState<BindingDraft[]>(() => initialBindings(props.mode, props.plants))
+  const [roles, setRoles] = useState<Role[]>([])
+  const [rolesError, setRolesError] = useState<string | null>(null)
   const title = props.mode === 'create' ? '新增用户' : props.mode === 'edit' ? '编辑用户' : '用户详情'
+
+  useEffect(() => {
+    let cancel = false
+    listAllRoles()
+      .then((items) => {
+        if (!cancel) setRoles(items)
+      })
+      .catch((err: unknown) => {
+        if (cancel || isStale(err) || isAuthRedirect(err)) return
+        setRolesError(formatProblem(toApiError(err).problem))
+      })
+    return () => {
+      cancel = true
+    }
+  }, [])
 
   useEffect(() => {
     if (props.mode === 'create' || !props.userId) return
@@ -205,7 +224,7 @@ export function UserEditor(props: Props) {
         </div>
       ) : null}
       {loading ? <div>正在加载用户</div> : null}
-      {!loading && !error && props.mode === 'detail' && detail ? <DetailView detail={detail} /> : null}
+      {!loading && !error && props.mode === 'detail' && detail ? <DetailView detail={detail} roles={roles} /> : null}
       {!loading && !error && props.mode !== 'detail' ? (
         <Form form={form} layout="vertical" requiredMark={false} initialValues={EMPTY}>
           <Form.Item label="用户名" name="username" extra={props.mode === 'create' ? '留空时使用工号的小写形式。' : undefined}>
@@ -243,14 +262,15 @@ export function UserEditor(props: Props) {
             </Form.Item>
           ) : null}
           <div className="mes-group-title">工厂任职</div>
-          <BindingEditor options={props.plants} value={bindings} onChange={setBindings} />
+          {rolesError ? <div className="mes-form-error">{rolesError}</div> : null}
+          <BindingEditor options={props.plants} roles={roles} value={bindings} onChange={setBindings} />
         </Form>
       ) : null}
     </Drawer>
   )
 }
 
-function DetailView({ detail }: { detail: UserDetail }) {
+function DetailView({ detail, roles }: { detail: UserDetail; roles: Role[] }) {
   return (
     <div className="mes-detail">
       <div>用户名：{detail.username}</div>
@@ -268,18 +288,28 @@ function DetailView({ detail }: { detail: UserDetail }) {
           {plant.isDefault ? '，默认工厂' : ''}
           {plant.active ? '' : '，已停用任职'}
           {plant.jobTitle ? `，${plant.jobTitle}` : ''}
+          {roleText(plant.roleIds, roles)}
         </div>
       ))}
     </div>
   )
 }
 
+function roleText(ids: string[] | undefined, roles: Role[]): string {
+  const list = ids ?? []
+  if (list.length === 0) return ''
+  const names = list.map((id) => roles.find((role) => role.id === id)?.name ?? id)
+  return `，角色 ${names.join('、')}`
+}
+
 function BindingEditor({
   options,
+  roles,
   value,
   onChange,
 }: {
   options: PlantChoice[]
+  roles: Role[]
   value: BindingDraft[]
   onChange: (next: BindingDraft[]) => void
 }) {
@@ -309,7 +339,7 @@ function BindingEditor({
               checked={Boolean(row)}
               onChange={(event) => {
                 if (event.target.checked) {
-                  update([...value, { plantId: option.id, isDefault: value.length === 0, active: true, jobTitle: '' }])
+                  update([...value, { plantId: option.id, isDefault: value.length === 0, active: true, jobTitle: '', roleIds: [] }])
                 } else {
                   update(value.filter((item) => item.plantId !== option.id))
                 }
@@ -347,16 +377,24 @@ function BindingEditor({
                 onChange(value.map((item) => (item.plantId === option.id ? { ...item, jobTitle } : item)))
               }}
             />
+            <Select
+              aria-label={`${option.name}角色`}
+              mode="multiple"
+              allowClear
+              virtual={false}
+              placeholder="角色"
+              disabled={!row}
+              style={{ minWidth: 220 }}
+              value={row?.roleIds ?? []}
+              options={roleOptions(roles, row?.roleIds ?? [])}
+              optionFilterProp="label"
+              onChange={(roleIds) => {
+                onChange(value.map((item) => (item.plantId === option.id ? { ...item, roleIds } : item)))
+              }}
+            />
           </div>
         )
       })}
-      <Form.Item label="角色">
-        <Tooltip title="即将上线">
-          <span className="mes-soon">
-            <Select disabled placeholder="角色" style={{ width: 240 }} />
-          </span>
-        </Tooltip>
-      </Form.Item>
       <Form.Item label="车间">
         <Tooltip title="即将上线">
           <span className="mes-soon">
@@ -371,7 +409,7 @@ function BindingEditor({
 function initialBindings(mode: EditorMode, plants: PlantChoice[]): BindingDraft[] {
   if (mode !== 'create' || plants.length !== 1) return []
   const only = plants[0]
-  return [{ plantId: only.id, isDefault: true, active: true, jobTitle: '' }]
+  return [{ plantId: only.id, isDefault: true, active: true, jobTitle: '', roleIds: [] }]
 }
 
 function toDraft(plant: PlantBinding): BindingDraft {
@@ -380,6 +418,7 @@ function toDraft(plant: PlantBinding): BindingDraft {
     isDefault: plant.isDefault,
     active: plant.active,
     jobTitle: plant.jobTitle ?? '',
+    roleIds: plant.roleIds ?? [],
   }
 }
 
@@ -389,8 +428,20 @@ function normalizeBindings(rows: BindingDraft[]): PlantBindingInput[] {
     isDefault: row.isDefault,
     active: row.active,
     jobTitle: row.jobTitle.trim() || null,
-    roleIds: [],
+    roleIds: row.roleIds,
   }))
+}
+
+function roleOptions(roles: Role[], selected: string[]) {
+  const options = roles.map((role) => ({
+    value: role.id,
+    label: `${role.name}（${role.code}）`,
+  }))
+  const known = new Set(options.map((item) => item.value))
+  for (const id of selected) {
+    if (!known.has(id)) options.push({ value: id, label: id })
+  }
+  return options
 }
 
 function blank(value: string): string | null {

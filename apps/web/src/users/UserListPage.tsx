@@ -27,6 +27,7 @@ import { maskEmail, maskMobile } from '../auth/mask.ts'
 import { passwordProblems } from '../auth/password.ts'
 import { recoverPlantAccess } from '../auth/store.ts'
 import { useAuth } from '../auth/useAuth.ts'
+import { Perm } from '../perm/Perm.tsx'
 import { zhCN } from '../locale.ts'
 import { resolvePage } from '../materials/query.ts'
 import { OneTimeSecret } from './OneTimeSecret.tsx'
@@ -252,62 +253,72 @@ function UserList({
       fixed: 'right',
       render: (_value, row) => (
         <Space size={0} className="mes-row-actions">
-          <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
-          <Button type="link" size="small" onClick={() => setDrawer({ mode: 'edit', id: row.id })}>编辑</Button>
-          {row.status === 'DISABLED' ? (
-            <Button type="link" size="small" disabled={acting} onClick={() => {
-              void run(async () => {
-                await enableUser(row.id, row.lockVersion)
-                message.success('已启用')
-              })
-            }}
+          <Perm code="sys:user:view">
+            <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
+          </Perm>
+          <Perm code="sys:user:update">
+            <Button type="link" size="small" onClick={() => setDrawer({ mode: 'edit', id: row.id })}>编辑</Button>
+          </Perm>
+          <Perm code="sys:user:enable">
+            {row.status === 'DISABLED' ? (
+              <Button type="link" size="small" disabled={acting} onClick={() => {
+                void run(async () => {
+                  await enableUser(row.id, row.lockVersion)
+                  message.success('已启用')
+                })
+              }}
+              >
+                启用
+              </Button>
+            ) : (
+              <Popconfirm title="停用该用户？" okText="停用" cancelText="取消" onConfirm={() => {
+                void run(async () => {
+                  await disableUser(row.id, row.lockVersion)
+                  message.success('已停用')
+                })
+              }}
+              >
+                <Button type="link" size="small" disabled={acting}>停用</Button>
+              </Popconfirm>
+            )}
+          </Perm>
+          <Perm code="sys:user:reset-pwd">
+            <Popconfirm
+              title="重置该用户的密码？"
+              description={superAdmin ? (
+                <div>
+                  <div>留空则生成临时口令，关闭后不能再查看。</div>
+                  <Input.Password
+                    aria-label={`${row.username}的新密码`}
+                    placeholder="新密码，可留空"
+                    onChange={(event) => passwordDraft.current.set(row.id, event.target.value)}
+                    onMouseDown={(event) => event.stopPropagation()}
+                  />
+                </div>
+              ) : '将生成临时口令，关闭后不能再查看。'}
+              okText="确认重置"
+              cancelText="取消"
+              onConfirm={() => reset(row)}
             >
-              启用
-            </Button>
-          ) : (
-            <Popconfirm title="停用该用户？" okText="停用" cancelText="取消" onConfirm={() => {
-              void run(async () => {
-                await disableUser(row.id, row.lockVersion)
-                message.success('已停用')
-              })
-            }}
-            >
-              <Button type="link" size="small" disabled={acting}>停用</Button>
+              <Button type="link" size="small" disabled={acting}>重置密码</Button>
             </Popconfirm>
-          )}
-          <Popconfirm
-            title="重置该用户的密码？"
-            description={superAdmin ? (
-              <div>
-                <div>留空则生成临时口令，关闭后不能再查看。</div>
-                <Input.Password
-                  aria-label={`${row.username}的新密码`}
-                  placeholder="新密码，可留空"
-                  onChange={(event) => passwordDraft.current.set(row.id, event.target.value)}
-                  onMouseDown={(event) => event.stopPropagation()}
-                />
-              </div>
-            ) : '将生成临时口令，关闭后不能再查看。'}
-            okText="确认重置"
-            cancelText="取消"
-            onConfirm={() => reset(row)}
-          >
-            <Button type="link" size="small" disabled={acting}>重置密码</Button>
-          </Popconfirm>
-          <Popconfirm
-            title="删除该用户？"
-            okText="删除"
-            okButtonProps={{ danger: true }}
-            cancelText="取消"
-            onConfirm={() => {
-              void run(async () => {
-                await deleteUser(row.id, row.lockVersion)
-                message.success('已删除')
-              })
-            }}
-          >
-            <Button type="link" size="small" danger disabled={acting}>删除</Button>
-          </Popconfirm>
+          </Perm>
+          <Perm code="sys:user:delete">
+            <Popconfirm
+              title="删除该用户？"
+              okText="删除"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              onConfirm={() => {
+                void run(async () => {
+                  await deleteUser(row.id, row.lockVersion)
+                  message.success('已删除')
+                })
+              }}
+            >
+              <Button type="link" size="small" danger disabled={acting}>删除</Button>
+            </Popconfirm>
+          </Perm>
         </Space>
       ),
     },
@@ -363,7 +374,9 @@ function UserList({
       <Card className="mes-table-card">
         <div className="mes-actions">
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>新增</Button>
+            <Perm code="sys:user:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>新增</Button>
+            </Perm>
             <Tooltip title="即将上线">
               <span className="mes-soon">
                 <Button disabled icon={<UploadOutlined />}>批量导入</Button>

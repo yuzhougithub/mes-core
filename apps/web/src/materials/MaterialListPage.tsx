@@ -15,6 +15,7 @@ import { deleteMaterial, listMaterials, listUoms } from '../api/resources.ts'
 import { formatProblem, isAuthRedirect, isStale, toApiError, type ApiError } from '../api/problem.ts'
 import { getPlantEpoch } from '../api/plant-session.ts'
 import type { Material, Uom } from '../api/types.ts'
+import { Perm } from '../perm/Perm.tsx'
 import { usePlant } from '../plant/usePlant.ts'
 import { setMaterialsEnabled } from './batch-enabled.ts'
 import { MATERIAL_STATUSES, plantStoppedMeta, statusMeta } from './constants.ts'
@@ -229,42 +230,50 @@ function MaterialList() {
       fixed: 'right',
       render: (_value, row) => (
         <Space size={0} className="mes-row-actions">
-          <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
-          <Button type="link" size="small" onClick={() => setDrawer({ mode: 'edit', id: row.id })}>编辑</Button>
-          {row.status === 'OBSOLETE' ? (
-            <Tooltip title="已作废，不能停用">
-              <span className="mes-soon">
-                <Button type="link" size="small" disabled>停用</Button>
-              </span>
-            </Tooltip>
-          ) : (
-            <Popconfirm
-              title="在当前工厂停用该物料？"
-              okText="停用"
-              cancelText="取消"
-              onConfirm={() => disableOne(row)}
-            >
-              <Button type="link" size="small">停用</Button>
-            </Popconfirm>
-          )}
-          {row.status === 'DRAFT' ? (
-            <Popconfirm
-              title="删除该草稿物料？"
-              description="仅草稿可以删除。"
-              okText="删除"
-              okButtonProps={{ danger: true }}
-              cancelText="取消"
-              onConfirm={() => remove(row)}
-            >
-              <Button type="link" size="small" danger>删除</Button>
-            </Popconfirm>
-          ) : (
-            <Tooltip title="只有草稿可以删除">
-              <span className="mes-soon">
-                <Button type="link" size="small" danger disabled>删除</Button>
-              </span>
-            </Tooltip>
-          )}
+          <Perm code="md:material:view">
+            <Button type="link" size="small" onClick={() => setDrawer({ mode: 'detail', id: row.id })}>详情</Button>
+          </Perm>
+          <Perm code="md:material:update">
+            <Button type="link" size="small" onClick={() => setDrawer({ mode: 'edit', id: row.id })}>编辑</Button>
+          </Perm>
+          <Perm code="md:material:update">
+            {row.status === 'OBSOLETE' ? (
+              <Tooltip title="已作废，不能停用">
+                <span className="mes-soon">
+                  <Button type="link" size="small" disabled>停用</Button>
+                </span>
+              </Tooltip>
+            ) : (
+              <Popconfirm
+                title="在当前工厂停用该物料？"
+                okText="停用"
+                cancelText="取消"
+                onConfirm={() => disableOne(row)}
+              >
+                <Button type="link" size="small">停用</Button>
+              </Popconfirm>
+            )}
+          </Perm>
+          <Perm code="md:material:delete">
+            {row.status === 'DRAFT' ? (
+              <Popconfirm
+                title="删除该草稿物料？"
+                description="仅草稿可以删除。"
+                okText="删除"
+                okButtonProps={{ danger: true }}
+                cancelText="取消"
+                onConfirm={() => remove(row)}
+              >
+                <Button type="link" size="small" danger>删除</Button>
+              </Popconfirm>
+            ) : (
+              <Tooltip title="只有草稿可以删除">
+                <span className="mes-soon">
+                  <Button type="link" size="small" danger disabled>删除</Button>
+                </span>
+              </Tooltip>
+            )}
+          </Perm>
         </Space>
       ),
     },
@@ -344,7 +353,9 @@ function MaterialList() {
       <Card className="mes-table-card">
         <div className="mes-actions">
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>新增</Button>
+            <Perm code="md:material:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>新增</Button>
+            </Perm>
             <Tooltip title="即将上线">
               <span className="mes-soon">
                 <Button disabled icon={<UploadOutlined />} data-testid="btn-import">批量导入</Button>
@@ -355,24 +366,28 @@ function MaterialList() {
                 <Button disabled icon={<DownloadOutlined />} data-testid="btn-export">导出</Button>
               </span>
             </Tooltip>
-            <Popconfirm
-              title="在当前工厂启用所选物料？"
-              okText="启用"
-              cancelText="取消"
-              disabled={selected.length === 0}
-              onConfirm={() => runBatch(true)}
-            >
-              <Button icon={<CheckOutlined />} disabled={selected.length === 0 || acting} data-testid="btn-enable">批量启用</Button>
-            </Popconfirm>
-            <Popconfirm
-              title="在当前工厂停用所选物料？"
-              okText="停用"
-              cancelText="取消"
-              disabled={selected.length === 0}
-              onConfirm={() => runBatch(false)}
-            >
-              <Button icon={<StopOutlined />} disabled={selected.length === 0 || acting} data-testid="btn-disable">批量停用</Button>
-            </Popconfirm>
+            <Perm code="md:material:update">
+              <Popconfirm
+                title="在当前工厂启用所选物料？"
+                okText="启用"
+                cancelText="取消"
+                disabled={selected.length === 0}
+                onConfirm={() => runBatch(true)}
+              >
+                <Button icon={<CheckOutlined />} disabled={selected.length === 0 || acting} data-testid="btn-enable">批量启用</Button>
+              </Popconfirm>
+            </Perm>
+            <Perm code="md:material:update">
+              <Popconfirm
+                title="在当前工厂停用所选物料？"
+                okText="停用"
+                cancelText="取消"
+                disabled={selected.length === 0}
+                onConfirm={() => runBatch(false)}
+              >
+                <Button icon={<StopOutlined />} disabled={selected.length === 0 || acting} data-testid="btn-disable">批量停用</Button>
+              </Popconfirm>
+            </Perm>
           </Space>
           <Space>
             <span className="mes-selected-count">已选 {selected.length} 项</span>

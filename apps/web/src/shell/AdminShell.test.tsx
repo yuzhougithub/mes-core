@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../App.tsx'
 import { resetPlantSession } from '../api/plant-session.ts'
 import { resetAuthSession, seedAuthSession } from '../auth/store.ts'
-import type { AuthSnapshot } from '../auth/types.ts'
+import type { AuthSnapshot, MeMenu, MeResponse } from '../auth/types.ts'
 
 const PLANT_A = '00000000-0000-4000-8000-00000000000a'
 const PLANT_B = '00000000-0000-4000-8000-00000000000b'
@@ -20,30 +20,89 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+function leaf(id: string, parentId: string, name: string, component: string, path: string): MeMenu {
+  return {
+    id,
+    parentId,
+    type: 'MENU',
+    name,
+    permCode: null,
+    path,
+    component,
+    icon: null,
+    sortNo: 0,
+    visible: true,
+    children: [],
+  }
+}
+
+const SHELL_MENUS: MeMenu[] = [
+  {
+    id: 'mod-material',
+    parentId: null,
+    type: 'DIR',
+    name: '物料管理',
+    permCode: null,
+    path: null,
+    component: null,
+    icon: null,
+    sortNo: 10,
+    visible: true,
+    children: [leaf('page-material', 'mod-material', '物料主数据', 'md/material', '/materials')],
+  },
+  {
+    id: 'mod-work',
+    parentId: null,
+    type: 'DIR',
+    name: '工作台',
+    permCode: null,
+    path: null,
+    component: null,
+    icon: null,
+    sortNo: 20,
+    visible: true,
+    children: [leaf('page-overview', 'mod-work', '概览', 'workbench/overview', '/overview')],
+  },
+]
+
+function sessionMe(plantId: string): MeResponse {
+  return {
+    user: {
+      id: USER,
+      username: 'admin',
+      status: 'ACTIVE',
+      superAdmin: true,
+      mustChangePassword: false,
+      permVersion: 1,
+    },
+    person: { id: '00000000-0000-4000-8000-0000000000bb', code: 'A001', name: '管理员' },
+    plant: {
+      id: plantId,
+      code: plantId === PLANT_B ? 'P2' : 'P1',
+      name: plantId === PLANT_B ? '二厂' : '一厂',
+    },
+    plants: [
+      { id: PLANT_A, code: 'P1', name: '一厂', isDefault: plantId !== PLANT_B },
+      { id: PLANT_B, code: 'P2', name: '二厂', isDefault: plantId === PLANT_B },
+    ],
+    roles: ['ADMIN'],
+    permissions: [
+      'md:material:list',
+      'md:material:view',
+      'md:material:create',
+      'md:material:update',
+      'md:material:delete',
+    ],
+    menus: SHELL_MENUS,
+  }
+}
+
 function seedShell() {
   const session: AuthSnapshot = {
     phase: 'ready',
     token: 'token-a',
     notice: null,
-    me: {
-      user: {
-        id: USER,
-        username: 'admin',
-        status: 'ACTIVE',
-        superAdmin: true,
-        mustChangePassword: false,
-        permVersion: 1,
-      },
-      person: { id: '00000000-0000-4000-8000-0000000000bb', code: 'A001', name: '管理员' },
-      plant: { id: PLANT_A, code: 'P1', name: '一厂' },
-      plants: [
-        { id: PLANT_A, code: 'P1', name: '一厂', isDefault: true },
-        { id: PLANT_B, code: 'P2', name: '二厂', isDefault: false },
-      ],
-      roles: ['ADMIN'],
-      permissions: [],
-      menus: [],
-    },
+    me: sessionMe(PLANT_A),
   }
   seedAuthSession(session)
 }
@@ -146,11 +205,17 @@ describe('admin shell and material list', () => {
     seedShell()
     const user = userEvent.setup()
     const lateA: { resolve: ((response: Response) => void) | null } = { resolve: null }
+    let plantNow = PLANT_A
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       const plantHeader = new Headers(init?.headers).get('X-Plant-Id')
       if (url.startsWith('/api/v1/auth/switch-plant')) {
-        return Promise.resolve(Response.json(switchBody(init)))
+        const body = switchBody(init)
+        plantNow = body.plant.id
+        return Promise.resolve(Response.json(body))
+      }
+      if (url.startsWith('/api/v1/auth/me')) {
+        return Promise.resolve(Response.json(sessionMe(plantNow)))
       }
       if (url.startsWith('/api/v1/uoms')) {
         return Promise.resolve(Response.json(page([])))

@@ -1,59 +1,50 @@
 import {
-  ApartmentOutlined,
   AppstoreOutlined,
   BankOutlined,
   BellOutlined,
   BranchesOutlined,
-  DatabaseOutlined,
   FileTextOutlined,
   FormOutlined,
   GoldOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   DownOutlined,
-  ProfileOutlined,
   QuestionCircleOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   ShareAltOutlined,
   TagOutlined,
-  ToolOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
 import { Alert, Button, Menu, Popover, Select, Tabs } from 'antd'
-import { useState, type ReactNode } from 'react'
+import type { MenuProps } from 'antd'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useAuth } from '../auth/useAuth.ts'
 import { useBrand } from '../brand/useBrand.ts'
-import { MaterialListPage } from '../materials/MaterialListPage.tsx'
 import { usePlant } from '../plant/usePlant.ts'
-import { UserListPage } from '../users/UserListPage.tsx'
+import { PageOutlet } from './pages.tsx'
 import { Placeholder } from './Placeholder.tsx'
 import { UserAccount } from './UserAccount.tsx'
-import { MODULES, findModule, type ModuleKey } from './nav.ts'
+import { dirKeys, findLeaf, firstLeaf, navFromMenus, type NavNode } from './nav-model.ts'
 
-const MENU_ICONS: Record<string, ReactNode> = {
-  overview: <AppstoreOutlined />,
-  orders: <ProfileOutlined />,
-  jobs: <FileTextOutlined />,
-  inspections: <SafetyCertificateOutlined />,
-  ledger: <ToolOutlined />,
-  materials: <GoldOutlined />,
-  categories: <ApartmentOutlined />,
-  uoms: <TagOutlined />,
-  boms: <DatabaseOutlined />,
-  operations: <ShareAltOutlined />,
-  routings: <BranchesOutlined />,
-  plants: <BankOutlined />,
-  schemas: <FormOutlined />,
-  users: <TeamOutlined />,
+function menuIcon(icon: string | null, component: string | null, kind: 'dir' | 'leaf'): ReactNode {
+  const mapped = (icon && ICONS[icon]) || (component && ICONS[component])
+  return <span className="mes-menu-icon" aria-hidden="true">{mapped ?? (kind === 'dir' ? <AppstoreOutlined /> : <FileTextOutlined />)}</span>
 }
 
-function ToolButton({
-  label,
-  icon,
-}: {
-  label: string
-  icon: ReactNode
-}) {
+const ICONS: Record<string, ReactNode> = {
+  'md/material': <GoldOutlined />,
+  'md/uom': <TagOutlined />,
+  'rtg/operation': <ShareAltOutlined />,
+  'rtg/routing': <BranchesOutlined />,
+  'org/plant': <BankOutlined />,
+  'sys/user': <TeamOutlined />,
+  'sys/role': <SafetyCertificateOutlined />,
+  'sys/menu': <AppstoreOutlined />,
+  'cfg/field-schema': <FormOutlined />,
+}
+
+function ToolButton({ label, icon }: { label: string; icon: ReactNode }) {
   return (
     <Popover content="即将上线">
       <Button type="text" aria-label={label} icon={icon} />
@@ -100,13 +91,38 @@ function PlantSelect() {
   )
 }
 
+function menuItems(nodes: readonly NavNode[]): MenuProps['items'] {
+  return nodes.map((node) => {
+    if (node.kind === 'dir') {
+      return {
+        key: node.key,
+        icon: menuIcon(node.icon, null, 'dir'),
+        label: node.label,
+        children: menuItems(node.children),
+      }
+    }
+    return {
+      key: node.key,
+      icon: menuIcon(node.icon, node.component, 'leaf'),
+      label: node.label,
+    }
+  })
+}
+
 export function AdminShell() {
   const brand = useBrand()
-  const [moduleKey, setModuleKey] = useState<ModuleKey>('material')
-  const [itemKey, setItemKey] = useState('materials')
+  const auth = useAuth()
+  const { plantId } = usePlant()
+  const modules = useMemo(() => navFromMenus(auth.me?.menus ?? []), [auth.me])
+  const [moduleKey, setModuleKey] = useState<string | null>(null)
+  const [leafKey, setLeafKey] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const module = findModule(moduleKey)
-  const item = module.items.find((entry) => entry.key === itemKey) ?? module.items[0]
+  const module = modules.find((item) => item.key === moduleKey) ?? modules[0] ?? null
+  const leaf = module ? (findLeaf(module.nodes, leafKey) ?? firstLeaf(module.nodes)) : null
+  const moduleId = module?.key ?? null
+  const openDefaults = useMemo(() => dirKeys(module?.nodes ?? []), [module])
+  const [openState, setOpenState] = useState<{ moduleId: string | null; keys: string[] } | null>(null)
+  const openKeys = openState?.moduleId === moduleId ? openState.keys : openDefaults
 
   return (
     <div className="mes-shell">
@@ -118,16 +134,18 @@ export function AdminShell() {
             {brand.subtitle ? <span className="mes-brand-sub" title={brand.subtitle}>{brand.subtitle}</span> : null}
           </div>
         </div>
-        <Tabs
-          className="mes-module-tabs"
-          activeKey={moduleKey}
-          onChange={(key) => {
-            const next = findModule(key as ModuleKey)
-            setModuleKey(next.key)
-            setItemKey(next.items[0].key)
-          }}
-          items={MODULES.map((entry) => ({ key: entry.key, label: entry.label }))}
-        />
+        {modules.length > 0 ? (
+          <Tabs
+            className="mes-module-tabs"
+            activeKey={module?.key}
+            onChange={(key) => {
+              const next = modules.find((item) => item.key === key)
+              setModuleKey(key)
+              setLeafKey(next ? firstLeaf(next.nodes)?.key ?? null : null)
+            }}
+            items={modules.map((entry) => ({ key: entry.key, label: entry.label }))}
+          />
+        ) : <div className="mes-module-tabs" />}
         <PlantSelect />
         <div className="mes-tools">
           <ToolButton label="搜索" icon={<SearchOutlined />} />
@@ -138,9 +156,9 @@ export function AdminShell() {
       </header>
       <div className="mes-body">
         <aside className={collapsed ? 'mes-sider is-collapsed' : 'mes-sider'}>
-          {collapsed ? null : (
+          {collapsed || !module ? null : (
             <div className="mes-menu-group">
-              <span className="mes-menu-group-icon">{MENU_ICONS[module.items[0]?.key ?? '']}</span>
+              <span className="mes-menu-group-icon">{menuIcon(module.icon, null, 'dir')}</span>
               <span>{module.label}</span>
               <DownOutlined />
             </div>
@@ -148,13 +166,13 @@ export function AdminShell() {
           <Menu
             mode="inline"
             inlineCollapsed={collapsed}
-            selectedKeys={[item.key]}
-            items={module.items.map((entry) => ({
-              key: entry.key,
-              icon: MENU_ICONS[entry.key],
-              label: entry.label,
-            }))}
-            onClick={({ key }) => setItemKey(String(key))}
+            selectedKeys={leaf ? [leaf.key] : []}
+            {...(collapsed ? {} : {
+              openKeys,
+              onOpenChange: (keys) => setOpenState({ moduleId, keys: keys.map(String) }),
+            })}
+            items={module ? menuItems(module.nodes) : []}
+            onClick={({ key }) => setLeafKey(String(key))}
           />
           <div className="mes-sider-foot">
             <Button
@@ -167,11 +185,13 @@ export function AdminShell() {
         </aside>
         <main className="mes-content">
           <div className="mes-breadcrumb">
-            {item.breadcrumb.join(' / ')}
+            {leaf ? leaf.breadcrumb.join(' / ') : ''}
           </div>
-          {item.key === 'materials' ? <MaterialListPage /> : null}
-          {item.key === 'users' ? <UserListPage /> : null}
-          {item.key !== 'materials' && item.key !== 'users' ? <Placeholder item={item} /> : null}
+          {leaf ? (
+            <PageOutlet key={`${plantId ?? ''}:${leaf.key}`} component={leaf.component} />
+          ) : (
+            <Placeholder message="没有可访问的菜单" />
+          )}
         </main>
       </div>
     </div>

@@ -4,8 +4,39 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../App.tsx'
 import { resetPlantSession } from '../api/plant-session.ts'
 import { resetAuthSession, seedAuthSession } from './store.ts'
+import type { MeMenu } from './types.ts'
 
 const PLANT = '00000000-0000-4000-8000-0000000000a1'
+
+const MATERIAL_MENUS: MeMenu[] = [
+  {
+    id: 'mod-material',
+    parentId: null,
+    type: 'DIR',
+    name: '物料管理',
+    permCode: null,
+    path: null,
+    component: null,
+    icon: null,
+    sortNo: 10,
+    visible: true,
+    children: [
+      {
+        id: 'page-material',
+        parentId: 'mod-material',
+        type: 'MENU',
+        name: '物料主数据',
+        permCode: 'md:material:list',
+        path: '/materials',
+        component: 'md/material',
+        icon: null,
+        sortNo: 10,
+        visible: true,
+        children: [],
+      },
+    ],
+  },
+]
 
 afterEach(() => {
   cleanup()
@@ -89,7 +120,7 @@ describe('forced password change', () => {
           plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
           roles: ['ADMIN'],
           permissions: [],
-          menus: [],
+          menus: MATERIAL_MENUS,
         })
       }
       if (url.startsWith('/api/v1/materials') || url.startsWith('/api/v1/uoms')) {
@@ -126,7 +157,7 @@ describe('forced password change', () => {
         plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
         roles: ['ADMIN'],
         permissions: [],
-        menus: [],
+        menus: MATERIAL_MENUS,
       },
     })
     let refreshes = 0
@@ -219,7 +250,7 @@ describe('forced password change', () => {
         plants: [{ id: PLANT, code: 'P1', name: '一厂', isDefault: true }],
         roles: ['ADMIN'],
         permissions: [],
-        menus: [],
+        menus: MATERIAL_MENUS,
       },
     })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
