@@ -16,9 +16,9 @@ import java.util.UUID;
 
 import jakarta.servlet.http.Cookie;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -42,8 +42,6 @@ import tools.jackson.databind.JsonNode;
 class AuthFlowMvcTest extends PgIntegrationTest {
 
     private static final String SECRET = "0123456789abcdef0123456789abcdef";
-    private static final String PASSWORD = "ChangeMe@1";
-    private static String passwordHash;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -51,15 +49,13 @@ class AuthFlowMvcTest extends PgIntegrationTest {
     @Autowired
     private org.springframework.transaction.PlatformTransactionManager transactions;
 
-    @BeforeAll
-    static void hashPassword() {
-        passwordHash = new BCryptPasswordEncoder(10).encode(PASSWORD);
-    }
+    @Value("${mes.auth.admin.initial-password}")
+    private String initialPassword;
 
     @Test
     void loginSucceedsAndMeUsesTokenPlant() throws Exception {
         Fixture fx = fixture();
-        MvcResult login = login(fx.username, PASSWORD);
+        MvcResult login = login(fx.username, initialPassword);
         JsonNode body = body(login);
         assertThat(body.get("accessToken").asString()).isNotBlank();
         assertThat(body.get("expiresIn").asLong()).isEqualTo(1800);
@@ -100,22 +96,40 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                     .andExpect(jsonPath("$.code").value("BAD_CREDENTIALS"));
         }
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content(credentials(fx.username, PASSWORD)))
+                        .content(credentials(fx.username, "still-wrong")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("BAD_CREDENTIALS"));
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials(fx.username, initialPassword)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
 
         jdbc.update("UPDATE sys_user SET locked_until = now() - interval '1 minute' WHERE id = ?",
                 UUID.fromString(fx.userId));
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content(credentials(fx.username, PASSWORD)))
+                        .content(credentials(fx.username, initialPassword)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty());
     }
 
     @Test
+    void wrongPasswordDoesNotRevealADisabledAccount() throws Exception {
+        Fixture fx = fixture();
+        jdbc.update("UPDATE sys_user SET status = 'DISABLED' WHERE id = ?", UUID.fromString(fx.userId));
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials(fx.username, "wrong-pass")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("BAD_CREDENTIALS"));
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials(fx.username, initialPassword)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
+    }
+
+    @Test
     void refreshRotatesAndLogoutRevokesTheFamily() throws Exception {
         Fixture fx = fixture();
-        MvcResult login = login(fx.username, PASSWORD);
+        MvcResult login = login(fx.username, initialPassword);
         String first = refreshValue(login);
 
         mvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie(RefreshCookies.NAME, first)))
@@ -142,7 +156,7 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
 
-        MvcResult again = login(fx.username, PASSWORD);
+        MvcResult again = login(fx.username, initialPassword);
         String live = refreshValue(again);
         String access = body(again).get("accessToken").asString();
         mvc.perform(post("/api/v1/auth/logout")
@@ -164,24 +178,16 @@ class AuthFlowMvcTest extends PgIntegrationTest {
     void switchToUnboundPlantIsRejected() throws Exception {
         Fixture fx = fixture();
         String other = insertPlant();
-        String token = body(login(fx.username, PASSWORD)).get("accessToken").asString();
+        String token = body(login(fx.username, initialPassword)).get("accessToken").asString();
         mvc.perform(bearer(post("/api/v1/auth/switch-plant"), token)
                         .content("{\"plantId\":\"" + other + "\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PLANT_FORBIDDEN"));
 
-        JsonNode user = body(mvc.perform(bearer(get("/api/v1/users/" + fx.userId), token))
-                .andExpect(status().isOk()).andReturn());
-        int lock = user.get("lockVersion").asInt();
-        mvc.perform(bearer(put("/api/v1/users/" + fx.userId + "/plants"), token)
-                        .content("""
-                                {"lockVersion":%d,"plants":[
-                                  {"plantId":"%s","isDefault":true,"active":true},
-                                  {"plantId":"%s","isDefault":false,"active":true}
-                                ]}
-                                """.formatted(lock, fx.plantId, other)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.plants.length()").value(2));
+        jdbc.update("""
+                INSERT INTO org_person_plant (person_id, plant_id, active, is_default)
+                VALUES (?, ?, true, false)
+                """, UUID.fromString(fx.personId), UUID.fromString(other));
 
         MvcResult switched = mvc.perform(bearer(post("/api/v1/auth/switch-plant"), token)
                         .content("{\"plantId\":\"" + other + "\"}"))
@@ -199,7 +205,7 @@ class AuthFlowMvcTest extends PgIntegrationTest {
     @Test
     void changePasswordEnforcesPolicyAndDropsSessions() throws Exception {
         Fixture admin = fixture();
-        String adminToken = body(login(admin.username, PASSWORD)).get("accessToken").asString();
+        String adminToken = body(login(admin.username, initialPassword)).get("accessToken").asString();
         String code = uniq("W");
         MvcResult created = mvc.perform(bearer(post("/api/v1/users"), adminToken)
                         .content(userJson(code, admin.plantId, true, "Init@Pass1")))
@@ -252,7 +258,7 @@ class AuthFlowMvcTest extends PgIntegrationTest {
     @Test
     void userCrudEnforcesOneDefaultAndOneAccount() throws Exception {
         Fixture admin = fixture();
-        String token = body(login(admin.username, PASSWORD)).get("accessToken").asString();
+        String token = body(login(admin.username, initialPassword)).get("accessToken").asString();
         String other = insertPlant();
         mvc.perform(bearer(post("/api/v1/users"), token)
                         .content("""
@@ -320,7 +326,7 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
 
-        String token = body(login(fx.username, PASSWORD)).get("accessToken").asString();
+        String token = body(login(fx.username, initialPassword)).get("accessToken").asString();
         String other = insertPlant();
         mvc.perform(get("/api/v1/uoms")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -341,13 +347,82 @@ class AuthFlowMvcTest extends PgIntegrationTest {
     }
 
     @Test
-    void seedAdminWithoutAssignmentCannotLogin() throws Exception {
-        jdbc.update("UPDATE sys_user SET password_hash = ?, must_change_pwd = true, fail_count = 0, locked_until = NULL WHERE username = 'admin'",
-                passwordHash);
-        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content(credentials("admin", PASSWORD)))
+    void superAdminWithoutPlantIsRestrictedUntilAssigned() throws Exception {
+        MvcResult first = login("admin", initialPassword);
+        assertThat(body(first).get("mustChangePassword").asBoolean()).isTrue();
+        assertThat(body(first).get("plant").isNull()).isTrue();
+        String blocked = body(first).get("accessToken").asString();
+        mvc.perform(bearer(get("/api/v1/uoms"), blocked))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PASSWORD_CHANGE_REQUIRED"));
+
+        String changed = initialPassword + "Z";
+        change(blocked, initialPassword, changed).andExpect(status().isNoContent());
+        String token = body(login("admin", changed)).get("accessToken").asString();
+        MvcResult me = mvc.perform(bearer(get("/api/v1/auth/me"), token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.superAdmin").value(true))
+                .andReturn();
+        JsonNode plant = body(me).get("plant");
+        assertThat(plant == null || plant.isNull()).isTrue();
+        mvc.perform(bearer(get("/api/v1/uoms"), token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NO_PLANT_ASSIGNMENT"));
+        mvc.perform(bearer(post("/api/v1/plants"), token)
+                        .content("{\"code\":\"" + uniq("P") + "\",\"name\":\"首厂\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(bearer(get("/api/v1/users"), token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void plantAdminCannotModifyUserFromAnotherPlant() throws Exception {
+        Fixture admin = fixture();
+        String plantB = insertPlant();
+        String superToken = body(login(admin.username, initialPassword)).get("accessToken").asString();
+        String foreignCode = uniq("B");
+        MvcResult foreign = mvc.perform(bearer(post("/api/v1/users"), superToken)
+                        .content(userJson(foreignCode, plantB, true, "Init@Pass1")))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String foreignId = body(foreign).get("id").asString();
+
+        UUID personId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID assignmentId = UUID.randomUUID();
+        String username = "a" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String hash = new BCryptPasswordEncoder(10).encode(initialPassword);
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.update("INSERT INTO org_person (id, code, name) VALUES (?, ?, ?)", personId, username.toUpperCase(), "厂管");
+            jdbc.update("""
+                    INSERT INTO sys_user
+                        (id, username, person_id, password_hash, status, super_admin, must_change_pwd, default_plant_id)
+                    VALUES (?, ?, ?, ?, 'ACTIVE', false, false, ?)
+                    """, userId, username, personId, hash, UUID.fromString(admin.plantId));
+            jdbc.update("""
+                    INSERT INTO org_person_plant (id, person_id, plant_id, active, is_default)
+                    VALUES (?, ?, ?, true, true)
+                    """, assignmentId, personId, UUID.fromString(admin.plantId));
+            jdbc.update("""
+                    INSERT INTO org_person_plant_role (person_plant_id, role_id)
+                    SELECT ?, id FROM org_role WHERE code = 'ADMIN'
+                    """, assignmentId);
+        });
+        String token = body(login(username, initialPassword)).get("accessToken").asString();
+        mvc.perform(bearer(get("/api/v1/users/" + foreignId), token))
+                .andExpect(status().isNotFound());
+        mvc.perform(bearer(post("/api/v1/users/" + foreignId + "/reset-password"), token)
+                        .content("{\"lockVersion\":0,\"newPassword\":\"Other@Pass12\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(bearer(get("/api/v1/users?q=" + foreignCode), token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(0));
+        mvc.perform(bearer(put("/api/v1/users/" + userId + "/plants"), token)
+                        .content("""
+                                {"lockVersion":0,"plants":[{"plantId":"%s","isDefault":true}]}
+                                """.formatted(admin.plantId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     private org.springframework.test.web.servlet.ResultActions change(String token, String oldPassword, String newPassword)
@@ -396,7 +471,8 @@ class AuthFlowMvcTest extends PgIntegrationTest {
                         (id, username, person_id, password_hash, status, super_admin, must_change_pwd,
                          default_plant_id, perm_version)
                     VALUES (?, ?, ?, ?, 'ACTIVE', true, false, ?, 0)
-                    """, userId, username, personId, passwordHash, UUID.fromString(plantId));
+                    """, userId, username, personId, new BCryptPasswordEncoder(10).encode(initialPassword),
+                    UUID.fromString(plantId));
             jdbc.update("""
                     INSERT INTO org_person_plant (person_id, plant_id, active, is_default)
                     VALUES (?, ?, true, true)

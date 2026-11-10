@@ -27,3 +27,7 @@ mes:
     mode: jwt
     jwt:
       secret: ${MES_AUTH_JWT_SECRET:}
+    # Applied once, only while the seed admin still has an unusable password hash.
+    # Required at startup outside the dev profile until that account is initialized.
+    admin:
+      initial-password: ${MES_ADMIN_INITIAL_PASSWORD:}

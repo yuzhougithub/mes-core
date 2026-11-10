@@ -77,6 +77,22 @@ ALTER TABLE org_person_plant
 CREATE UNIQUE INDEX uk_org_person_plant_default
     ON org_person_plant (person_id) WHERE is_default;
 
+-- 建触发器之前回填：每人选最早的一条任职作为默认工厂。
+UPDATE org_person_plant AS chosen
+   SET is_default = true
+  FROM (
+        SELECT DISTINCT ON (person_id) id
+          FROM org_person_plant
+         ORDER BY person_id, created_at, plant_id
+       ) AS first_row
+ WHERE chosen.id = first_row.id
+   AND NOT EXISTS (
+        SELECT 1 FROM org_person_plant other
+         WHERE other.person_id = chosen.person_id
+           AND other.is_default
+           AND other.id <> chosen.id
+   );
+
 -- ---------------------------------------------------------------------
 -- 刷新令牌：随机 256 位的 SHA-256 十六进制；同一 family_id 轮换，重放则整族作废。
 -- plant_id 记住当前工厂，刷新后 access token 仍落在该厂（任职失效则重选）。
@@ -183,19 +199,22 @@ CREATE CONSTRAINT TRIGGER trg_sys_user_one_person
     FOR EACH ROW
     EXECUTE FUNCTION mes_person_one_user();
 
--- 已有人员补账号：用户名 = 工号小写，必须改密。口令哈希对应一次随机口令，明文不落库，须管理员重置。
-INSERT INTO sys_user (username, person_id, password_hash, status, must_change_pwd)
-SELECT lower(p.code), p.id, '$2a$10$G1xONIoTlhVkAbQt1Vvjmu/q3Q8jGFYlBbLCkXSi0ckGMxDcyFfyC',
+-- 已有人员补账号：用户名 = 工号小写。口令哈希 '!' 不可登录，须管理员重置后才能使用。
+INSERT INTO sys_user (username, person_id, password_hash, status, must_change_pwd, default_plant_id)
+SELECT lower(p.code), p.id, '!',
        CASE WHEN p.enabled THEN 'ACTIVE' ELSE 'DISABLED' END,
-       true
+       true,
+       (SELECT pp.plant_id FROM org_person_plant pp
+         WHERE pp.person_id = p.id AND pp.is_default
+         LIMIT 1)
   FROM org_person p
  WHERE NOT p.deleted
    AND NOT EXISTS (
         SELECT 1 FROM sys_user u WHERE u.person_id = p.id AND NOT u.deleted
    );
 
--- 种子超级管理员。初始口令 ChangeMe@1（满足策略），must_change_pwd = true。
--- 不预置工厂：没有任职时登录返回 403 NO_PLANT_ASSIGNMENT，避免无故造一个业务工厂。
+-- 种子超级管理员。口令哈希不可用；首次启动由 MES_ADMIN_INITIAL_PASSWORD 写入并强制改密。
+-- 没有任职时进入受限会话（建厂、用户管理、改密、/auth/me），不预置业务工厂。
 INSERT INTO org_person (id, code, name, remark)
 SELECT '00000000-0000-4000-8000-0000000000a1', 'ADMIN', '系统管理员', '种子超级管理员'
  WHERE NOT EXISTS (SELECT 1 FROM org_person WHERE code = 'ADMIN' AND NOT deleted);
@@ -205,7 +224,7 @@ INSERT INTO sys_user (
 SELECT '00000000-0000-4000-8000-0000000000a2',
        'admin',
        '00000000-0000-4000-8000-0000000000a1',
-       '$2a$10$ZF14XrdRGDiV0KdxqTpaqO/sOHzB3u7Y1VxBMi8A4fwEREdLrtxTa',
+       '!',
        'ACTIVE',
        true,
        true

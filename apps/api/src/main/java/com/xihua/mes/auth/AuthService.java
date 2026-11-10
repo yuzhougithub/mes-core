@@ -89,28 +89,34 @@ public class AuthService {
             log.info("login result=BAD_CREDENTIALS username={}", normalized);
             throw ApiException.badCredentials();
         }
+        OffsetDateTime now = now();
+        expireLockIfDue(user, now);
+        if (!matches) {
+            if (usableAccount(user) && !locked(user)) {
+                users.registerFailure(user.getId(), policy.maxFailures(), now.plusMinutes(policy.lockMinutes()), now);
+            }
+            log.info("login result=BAD_CREDENTIALS username={}", normalized);
+            throw ApiException.badCredentials();
+        }
         if (!usableAccount(user)) {
             log.info("login result=DISABLED username={}", normalized);
             throw ApiException.accountDisabled();
         }
-        OffsetDateTime now = now();
-        expireLockIfDue(user, now);
         if (locked(user)) {
             log.info("login result=LOCKED username={}", normalized);
             throw ApiException.accountLocked();
         }
-        if (!matches) {
-            users.registerFailure(user.getId(), policy.maxFailures(), now.plusMinutes(policy.lockMinutes()), now);
-            log.info("login result=BAD_CREDENTIALS username={}", normalized);
-            throw ApiException.badCredentials();
-        }
         UUID plantId = choosePlant(user);
         if (plantId == null) {
-            log.info("login result=NO_PLANT username={}", normalized);
-            throw ApiException.noPlantAssignment();
+            if (!Boolean.TRUE.equals(user.getSuperAdmin())) {
+                log.info("login result=NO_PLANT username={}", normalized);
+                throw ApiException.noPlantAssignment();
+            }
+            plantId = NoPlant.ID;
         }
-        users.markLogin(user.getId(), plantId, client.ip(), now);
-        String refresh = issueRefresh(user.getId(), plantId, UUID.randomUUID(), client, now, policy);
+        UUID storedPlant = NoPlant.ID.equals(plantId) ? null : plantId;
+        users.markLogin(user.getId(), storedPlant, client.ip(), now);
+        String refresh = issueRefresh(user.getId(), storedPlant, UUID.randomUUID(), client, now, policy);
         String access = jwt.issue(user.getId(), user.getPersonId(), plantId, version(user),
                 Duration.ofMinutes(policy.accessMinutes()));
         log.info("login result=SUCCESS username={} plant={}", normalized, plantId);
@@ -150,12 +156,18 @@ public class AuthService {
             plantId = choosePlant(user);
         }
         if (plantId == null) {
-            throw ApiException.noPlantAssignment();
+            if (!Boolean.TRUE.equals(user.getSuperAdmin())) {
+                throw ApiException.noPlantAssignment();
+            }
+            plantId = NoPlant.ID;
         }
         SecurityPolicy policy = policies.current();
+        UUID storedPlant = NoPlant.ID.equals(plantId) ? null : plantId;
         refreshTokens.revokeOne(row.getId(), now);
-        String next = issueRefresh(user.getId(), plantId, row.getFamilyId(), client, now, policy);
-        users.touchLastPlant(user.getId(), plantId, now);
+        String next = issueRefresh(user.getId(), storedPlant, row.getFamilyId(), client, now, policy);
+        if (storedPlant != null) {
+            users.touchLastPlant(user.getId(), storedPlant, now);
+        }
         String access = jwt.issue(user.getId(), user.getPersonId(), plantId, version(user),
                 Duration.ofMinutes(policy.accessMinutes()));
         return new IssuedSession(tokenResponse(user, plantId, access, policy), next,
@@ -216,15 +228,18 @@ public class AuthService {
         SysUser user = requireUser(userId);
         SecurityPolicy policy = policies.current();
         OffsetDateTime now = now();
+        expireLockIfDue(user, now);
+        if (!encoder.matches(oldPassword == null ? "" : oldPassword, user.getPasswordHash())) {
+            if (usableAccount(user) && !locked(user)) {
+                users.registerFailure(user.getId(), policy.maxFailures(), now.plusMinutes(policy.lockMinutes()), now);
+            }
+            throw ApiException.badCredentials();
+        }
         if (!usableAccount(user)) {
             throw ApiException.accountDisabled();
         }
         if (locked(user)) {
             throw ApiException.accountLocked();
-        }
-        if (!encoder.matches(oldPassword == null ? "" : oldPassword, user.getPasswordHash())) {
-            users.registerFailure(user.getId(), policy.maxFailures(), now.plusMinutes(policy.lockMinutes()), now);
-            throw ApiException.badCredentials();
         }
         String next = newPassword == null ? "" : newPassword;
         if (encoder.matches(next, user.getPasswordHash())) {
@@ -245,29 +260,35 @@ public class AuthService {
         SysUser user = requireUser(userId);
         Person person = accounts.require(user.getPersonId());
         List<ActivePlant> active = accounts.activePlants(user.getPersonId());
-        ActivePlant current = active.stream().filter(plant -> plant.plantId().equals(plantId)).findFirst()
-                .orElseThrow(ApiException::noPlantAssignment);
+        boolean unrestricted = plantId != null && !NoPlant.ID.equals(plantId);
+        ActivePlant current = unrestricted
+                ? active.stream().filter(plant -> plant.plantId().equals(plantId)).findFirst()
+                        .orElseThrow(ApiException::noPlantAssignment)
+                : null;
         boolean must = Boolean.TRUE.equals(user.getMustChangePwd()) || policies.passwordExpired(user.getPwdChangedAt());
         return new MeResponse(
                 new MeUser(user.getId().toString(), user.getUsername(), user.getStatus(),
                         Boolean.TRUE.equals(user.getSuperAdmin()), must, version(user)),
                 new MePerson(person.getId(), person.getCode(), person.getName()),
-                new MePlant(current.plantId().toString(), current.code(), current.name()),
+                current == null ? null : new MePlant(current.plantId().toString(), current.code(), current.name()),
                 active.stream()
                         .map(plant -> new PlantOption(plant.plantId().toString(), plant.code(), plant.name(),
                                 plant.defaultPlant()))
                         .toList(),
-                accounts.roleCodes(user.getPersonId(), plantId),
+                current == null ? List.of() : accounts.roleCodes(user.getPersonId(), plantId),
                 List.of(),
                 List.of());
     }
 
     private TokenResponse tokenResponse(SysUser user, UUID plantId, String access, SecurityPolicy policy) {
+        boolean must = Boolean.TRUE.equals(user.getMustChangePwd()) || policies.passwordExpired(user.getPwdChangedAt());
+        if (plantId == null || NoPlant.ID.equals(plantId)) {
+            return new TokenResponse(access, policy.accessMinutes() * 60L, must, null, List.of());
+        }
         ActivePlant plant = accounts.activePlants(user.getPersonId()).stream()
                 .filter(row -> row.plantId().equals(plantId))
                 .findFirst()
                 .orElseThrow(ApiException::noPlantAssignment);
-        boolean must = Boolean.TRUE.equals(user.getMustChangePwd()) || policies.passwordExpired(user.getPwdChangedAt());
         return new TokenResponse(access, policy.accessMinutes() * 60L, must,
                 new PlantBrief(plant.plantId(), plant.code(), plant.name()),
                 accounts.roleCodes(user.getPersonId(), plantId));

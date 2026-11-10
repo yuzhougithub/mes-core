@@ -30,6 +30,16 @@ class PasswordPolicyTest {
     }
 
     @Test
+    void rejectsPasswordsLongerThan72Bytes() {
+        String tooLong = "Aa1!" + "b".repeat(69);
+        assertEquals(73, tooLong.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        assertEquals(ErrorCodes.TOO_LONG, PasswordPolicy.violations(tooLong, "worker", policy).get(0).code());
+        String max = "Aa1!" + "b".repeat(68);
+        assertEquals(72, max.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        assertTrue(PasswordPolicy.violations(max, "worker", policy).isEmpty());
+    }
+
+    @Test
     void checkThrowsPasswordPolicy() {
         ApiException ex = org.junit.jupiter.api.Assertions.assertThrows(ApiException.class,
                 () -> PasswordPolicy.check("short", "worker", policy));

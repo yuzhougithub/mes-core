@@ -83,6 +83,12 @@ public class AccessAuthenticator {
         if (mustChange && !RequestPaths.changePassword(request)) {
             throw ApiException.passwordChangeRequired();
         }
+        if (NoPlant.ID.equals(claims.plantId())) {
+            if (!Boolean.TRUE.equals(user.getSuperAdmin()) || !NoPlant.allows(request)) {
+                throw ApiException.noPlantAssignment();
+            }
+            return new Session(user.getId(), user.getPersonId(), claims.plantId(), claims.jti());
+        }
         if (!plants.isActive(claims.plantId())) {
             throw ApiException.plantForbidden("工厂不存在或已停用：" + claims.plantId());
         }

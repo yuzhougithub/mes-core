@@ -129,7 +129,19 @@ public class PersonAccountService {
      */
     @Transactional
     public UUID replaceAssignments(UUID personId, List<AssignmentDraft> drafts) {
+        return replaceAssignments(personId, drafts, false);
+    }
+
+    /**
+     * @param allowEmpty plant-scoped editors may remove the user from the current plant and leave
+     *        no assignments; a full replace still requires exactly one default
+     */
+    public UUID replaceAssignments(UUID personId, List<AssignmentDraft> drafts, boolean allowEmpty) {
         List<AssignmentDraft> rows = drafts == null ? List.of() : drafts;
+        if (rows.isEmpty() && allowEmpty) {
+            assignments.deleteByPerson(personId);
+            return null;
+        }
         Errors errors = new Errors();
         Set<UUID> seen = new HashSet<>();
         int defaults = 0;

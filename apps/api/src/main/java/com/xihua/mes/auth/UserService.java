@@ -2,6 +2,7 @@ package com.xihua.mes.auth;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -93,6 +94,12 @@ public class UserService {
                         SELECT id FROM org_person WHERE NOT deleted AND (code ILIKE {0} OR name ILIKE {0})))
                     """, pattern);
         }
+        if (!guard.superAdmin()) {
+            qw.apply("""
+                    person_id IN (
+                        SELECT person_id FROM org_person_plant WHERE plant_id = {0} AND active)
+                    """, CurrentContext.requirePlantUuid());
+        }
         long total = users.selectCount(qw);
         page.applyOrderAndLimit(qw, SORT, "username");
         List<SysUser> rows = users.selectList(qw);
@@ -111,7 +118,9 @@ public class UserService {
 
     public UserDetail get(UUID id) {
         guard.check("sys:user:list");
-        return detail(require(id), null);
+        SysUser user = require(id);
+        requireInCurrentPlant(user);
+        return detail(user, null);
     }
 
     @Transactional
@@ -137,6 +146,14 @@ public class UserService {
         if (Boolean.TRUE.equals(req.superAdmin()) && !guard.superAdmin()) {
             throw ApiException.permissionDenied("sys:user:grant");
         }
+        List<AssignmentDraft> createPlants = drafts(req.plants());
+        if (!guard.superAdmin()) {
+            UUID current = CurrentContext.requirePlantUuid();
+            if (createPlants.size() != 1 || createPlants.get(0).plantId() == null
+                    || !current.equals(createPlants.get(0).plantId())) {
+                throw ApiException.permissionDenied("sys:user:grant");
+            }
+        }
         if (users.findByUsername(username) != null) {
             throw duplicateUsername(username);
         }
@@ -148,7 +165,7 @@ public class UserService {
         String password = generated ? PasswordPolicy.generate(username, policy) : req.password();
         PasswordPolicy.check(password, username, policy);
         Person person = accounts.insert(code, name, mobile, email, remark);
-        UUID defaultPlant = accounts.replaceAssignments(person.getId(), drafts(req.plants()));
+        UUID defaultPlant = accounts.replaceAssignments(person.getId(), createPlants);
         SysUser user = new SysUser();
         user.setId(UUID.randomUUID());
         user.setUsername(username);
@@ -171,6 +188,7 @@ public class UserService {
         guard.check("sys:user:update");
         requireBody(req);
         SysUser user = require(id);
+        requireInCurrentPlant(user);
         protectSuper(user);
         Locks.check(req.lockVersion(), user.getLockVersion());
         Errors errors = new Errors();
@@ -199,6 +217,7 @@ public class UserService {
     public void delete(UUID id, Integer lockVersion) {
         guard.check("sys:user:delete");
         SysUser user = require(id);
+        requireInCurrentPlant(user);
         protectSuper(user);
         Locks.check(lockVersion, user.getLockVersion());
         if (id.equals(CurrentContext.userUuid())) {
@@ -218,6 +237,7 @@ public class UserService {
     public UserDetail setStatus(UUID id, Integer lockVersion, String status) {
         guard.check("sys:user:enable");
         SysUser user = require(id);
+        requireInCurrentPlant(user);
         protectSuper(user);
         Locks.check(lockVersion, user.getLockVersion());
         if ("DISABLED".equals(status) && id.equals(CurrentContext.userUuid())) {
@@ -241,6 +261,7 @@ public class UserService {
     public UserDetail unlock(UUID id, Integer lockVersion) {
         guard.check("sys:user:update");
         SysUser user = require(id);
+        requireInCurrentPlant(user);
         protectSuper(user);
         Locks.check(lockVersion, user.getLockVersion());
         if (users.unlock(id, user.getLockVersion(), now()) != 1) {
@@ -254,6 +275,7 @@ public class UserService {
         guard.check("sys:user:reset-pwd");
         requireBody(req);
         SysUser user = require(id);
+        requireInCurrentPlant(user);
         protectSuper(user);
         Locks.check(req.lockVersion(), user.getLockVersion());
         SecurityPolicy policy = policies.current();
@@ -273,13 +295,48 @@ public class UserService {
         guard.check("sys:user:update");
         requireBody(req);
         SysUser user = require(id);
+        requireInCurrentPlant(user);
         protectSuper(user);
+        if (id.equals(CurrentContext.userUuid())) {
+            throw ApiException.permissionDenied("sys:user:grant");
+        }
         Locks.check(req.lockVersion(), user.getLockVersion());
-        UUID defaultPlant = accounts.replaceAssignments(user.getPersonId(), drafts(req.plants()));
+        List<AssignmentDraft> submitted = drafts(req.plants());
+        UUID defaultPlant;
+        if (guard.superAdmin()) {
+            defaultPlant = accounts.replaceAssignments(user.getPersonId(), submitted);
+        } else {
+            UUID current = CurrentContext.requirePlantUuid();
+            for (AssignmentDraft draft : submitted) {
+                if (draft.plantId() == null || !current.equals(draft.plantId())) {
+                    throw ApiException.permissionDenied("sys:user:grant");
+                }
+            }
+            List<AssignmentDraft> merged = new ArrayList<>();
+            for (AssignmentView existing : accounts.listAssignments(user.getPersonId())) {
+                if (!current.equals(existing.plantId())) {
+                    merged.add(new AssignmentDraft(existing.plantId(), existing.defaultPlant(), existing.active(),
+                            existing.workshopId(), existing.jobTitle(), existing.roleIds()));
+                }
+            }
+            merged.addAll(submitted);
+            defaultPlant = accounts.replaceAssignments(user.getPersonId(), merged, true);
+        }
         if (users.replaceDefaultPlant(id, defaultPlant, user.getLockVersion(), now()) != 1) {
             throw ApiException.staleVersion();
         }
         return detail(require(id), null);
+    }
+
+    /** Non-super-admins only see users with an active assignment in the current plant. */
+    private void requireInCurrentPlant(SysUser user) {
+        if (guard.superAdmin()) {
+            return;
+        }
+        UUID plantId = CurrentContext.requirePlantUuid();
+        if (NoPlant.ID.equals(plantId) || !accounts.hasActive(user.getPersonId(), plantId)) {
+            throw ApiException.notFound("用户");
+        }
     }
 
     private UserDetail detail(SysUser user, String initialPassword) {

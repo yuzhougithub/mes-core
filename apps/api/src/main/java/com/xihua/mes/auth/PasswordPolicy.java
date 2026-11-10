@@ -1,5 +1,6 @@
 package com.xihua.mes.auth;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,9 @@ public final class PasswordPolicy {
     private static final String LOWER = "abcdefghijkmnopqrstuvwxyz";
     private static final String DIGITS = "23456789";
     private static final String SYMBOLS = "!@#$%*-_";
+    /** BCrypt only uses the first 72 bytes; longer passwords are rejected instead of silently truncated. */
+    public static final int MAX_UTF8_BYTES = 72;
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private PasswordPolicy() {
@@ -25,6 +29,10 @@ public final class PasswordPolicy {
         List<FieldError> errors = new ArrayList<>();
         if (password == null || password.isBlank()) {
             errors.add(new FieldError("password", ErrorCodes.REQUIRED, "密码必填"));
+            return errors;
+        }
+        if (password.getBytes(StandardCharsets.UTF_8).length > MAX_UTF8_BYTES) {
+            errors.add(new FieldError("password", ErrorCodes.TOO_LONG, "密码不能超过 72 字节"));
             return errors;
         }
         if (password.codePointCount(0, password.length()) < policy.minLength()) {
