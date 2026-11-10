@@ -28,7 +28,7 @@ class MasterDataSchemaTest extends PgIntegrationTest {
         assertThat(jdbc.queryForList("SELECT code FROM org_role ORDER BY code", String.class))
                 .containsExactly("ADMIN", "EDITOR", "VIEWER");
         assertThat(jdbc.queryForObject("SELECT max(version) FROM flyway_schema_history", String.class))
-                .isEqualTo("6");
+                .isEqualTo("7");
         assertThat(jdbc.queryForObject(
                 "SELECT to_regclass('public.sys_user') IS NOT NULL", Boolean.class)).isTrue();
         assertThat(jdbc.queryForObject(

@@ -25,7 +25,7 @@ public final class DataScopeHandler implements MultiDataPermissionHandler {
 
     @Override
     public Expression getSqlSegment(Table table, Expression where, String mappedStatementId) {
-        if (table == null) {
+        if (table == null || DataScopeHolder.suppressed()) {
             return null;
         }
         DataScopeTable registered = DataScopeTable.ofTable(table.getName());

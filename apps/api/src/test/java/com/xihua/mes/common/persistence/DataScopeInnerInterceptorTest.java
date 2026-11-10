@@ -45,13 +45,14 @@ class DataScopeInnerInterceptorTest {
     }
 
     @Test
-    void accountScopeGoesThroughPersonAndCreatedBy() {
+    void accountScopeUsesPersonDeptAndOwnUserId() {
         DataScopeHolder.push(null, true, false);
         String sql = rewrite("SELECT id FROM sys_user", decision(false, false, Set.of("DEPT", "SELF"),
                 List.of()));
         assertThat(sql).contains("person_id IN (SELECT id FROM org_person WHERE NOT deleted AND dept_id = '"
                 + DEPT + "')");
-        assertThat(sql).contains("created_by = '" + USER + "'");
+        assertThat(sql).contains("id = '" + USER + "'");
+        assertThat(sql).doesNotContain("created_by");
         assertThat(sql).containsIgnoringCase(" or ");
     }
 

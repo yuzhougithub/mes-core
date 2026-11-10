@@ -40,20 +40,20 @@ public class PostController {
     }
 
     @PostMapping
-    @RequiresPerm("org:post:create")
+    @RequiresPerm(value = "org:post:create", global = true)
     public ResponseEntity<PostView> create(@RequestBody(required = false) PostWrite req) {
         PostView created = posts.create(req);
         return ResponseEntity.created(URI.create("/api/v1/posts/" + created.id())).body(created);
     }
 
     @PutMapping("/{id}")
-    @RequiresPerm("org:post:update")
+    @RequiresPerm(value = "org:post:update", global = true)
     public PostView update(@PathVariable UUID id, @RequestBody(required = false) PostWrite req) {
         return posts.update(id, req);
     }
 
     @DeleteMapping("/{id}")
-    @RequiresPerm("org:post:delete")
+    @RequiresPerm(value = "org:post:delete", global = true)
     public ResponseEntity<Void> delete(@PathVariable UUID id, @RequestParam(required = false) Integer lockVersion) {
         posts.delete(id, lockVersion);
         return ResponseEntity.noContent().build();

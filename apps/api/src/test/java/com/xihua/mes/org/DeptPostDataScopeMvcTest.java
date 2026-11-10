@@ -268,8 +268,9 @@ class DeptPostDataScopeMvcTest extends PgIntegrationTest {
         assertUsernames(token, caller.username(), inChild.username(), inGrand.username());
 
         setScope(roleId, "SELF");
-        assertUsernames(token, madeByCaller.username());
-        mvc.perform(bearer(get("/api/v1/users/" + caller.userId()), token)).andExpect(status().isNotFound());
+        assertUsernames(token, caller.username());
+        mvc.perform(bearer(get("/api/v1/users/" + caller.userId()), token)).andExpect(status().isOk());
+        mvc.perform(bearer(get("/api/v1/users/" + madeByCaller.userId()), token)).andExpect(status().isNotFound());
 
         setScope(roleId, "CUSTOM");
         jdbc.update("DELETE FROM sys_role_data_dept WHERE role_id = ?::uuid", roleId);
@@ -291,13 +292,15 @@ class DeptPostDataScopeMvcTest extends PgIntegrationTest {
                         .content("{\"code\":\"" + roleCode() + "\",\"name\":\"本人\",\"dataScope\":\"SELF\"}"))
                 .andExpect(status().isCreated())
                 .andReturn()).get("id").asString();
-        setScope(roleId, "DEPT");
+        setScope(roleId, "CUSTOM");
+        jdbc.update("DELETE FROM sys_role_data_dept WHERE role_id = ?::uuid", roleId);
+        jdbc.update("INSERT INTO sys_role_data_dept (role_id, dept_id) VALUES (?::uuid, ?::uuid)", roleId, sibling);
         jdbc.update("""
                 INSERT INTO org_person_plant_role (person_plant_id, role_id)
                 SELECT id, ?::uuid FROM org_person_plant
                  WHERE person_id = ?::uuid AND plant_id = ?::uuid
                 """, selfRole, caller.personId(), caller.plantId());
-        assertUsernames(token, caller.username(), inChild.username(), madeByCaller.username());
+        assertUsernames(token, caller.username(), inSibling.username());
     }
 
     @Test
@@ -400,7 +403,77 @@ class DeptPostDataScopeMvcTest extends PgIntegrationTest {
                 .andExpect(status().isCreated());
         mvc.perform(bearer(post("/api/v1/posts"), token)
                         .content("{\"code\":\"" + uniq("POST") + "\",\"name\":\"岗位\"}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void putDeptOmitsParentAndExplicitParentMoves() throws Exception {
+        String token = token(account(null, true));
+        String root = dept(token, uniq("D"), "根", null);
+        String child = dept(token, uniq("D"), "子", root);
+        mvc.perform(bearer(put("/api/v1/depts/" + child), token)
+                        .content("{\"name\":\"子-改名\",\"lockVersion\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("子-改名"))
+                .andExpect(jsonPath("$.parentId").value(root));
+        mvc.perform(bearer(put("/api/v1/depts/" + child), token)
+                        .content("{\"name\":\"子-到根\",\"parentId\":null,\"lockVersion\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parentId").value(nullValue()));
+    }
+
+    @Test
+    void plantAdminWritesOnlyCurrentPlantDeptsAndAssignsExistingPosts() throws Exception {
+        Account admin = account(null, true);
+        String adminToken = token(admin);
+        String shared = body(mvc.perform(bearer(post("/api/v1/depts"), adminToken)
+                        .content("{\"code\":\"" + uniq("D") + "\",\"name\":\"集团部\",\"shared\":true}"))
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asString();
+        String postId = body(mvc.perform(bearer(post("/api/v1/posts"), adminToken)
+                        .content("{\"code\":\"" + uniq("POST") + "\",\"name\":\"班长\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()).get("id").asString();
+        Account local = account(admin.plantId(), false);
+        Account plantAdmin = account(admin.plantId(), false, "ADMIN");
+        String token = token(plantAdmin);
+
+        mvc.perform(bearer(post("/api/v1/depts"), token)
+                        .content("{\"code\":\"" + uniq("D") + "\",\"name\":\"越权集团\",\"shared\":true}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        mvc.perform(bearer(put("/api/v1/depts/" + shared), token)
+                        .content("{\"name\":\"改集团\",\"lockVersion\":0}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(delete("/api/v1/depts/" + shared + "?lockVersion=0"), token))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/v1/depts/" + shared + "/move"), token)
+                        .content("{\"parentId\":null,\"lockVersion\":0}"))
+                .andExpect(status().isForbidden());
+
+        String own = body(mvc.perform(bearer(post("/api/v1/depts"), token)
+                        .content(deptJson(uniq("D"), "本厂", null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.plantId").value(admin.plantId()))
+                .andReturn()).get("id").asString();
+        mvc.perform(bearer(put("/api/v1/depts/" + own), token)
+                        .content("{\"name\":\"本厂-改\",\"lockVersion\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("本厂-改"));
+
+        mvc.perform(bearer(put("/api/v1/posts/" + postId), token)
+                        .content("{\"name\":\"改岗位\",\"lockVersion\":0}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(delete("/api/v1/posts/" + postId + "?lockVersion=0"), token))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(bearer(put("/api/v1/users/" + local.userId()), token)
+                        .content("""
+                                {"username":"%s","name":"测试","lockVersion":0,"org":{"postIds":["%s"]}}
+                                """.formatted(local.username(), postId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.person.postIds[0]").value(postId));
     }
 
     private void assertUsernames(String token, String... expected) throws Exception {

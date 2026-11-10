@@ -10,15 +10,89 @@ public final class DeptDtos {
     private DeptDtos() {
     }
 
-    public record DeptWrite(
-            String code,
-            String name,
-            UUID parentId,
-            UUID leaderPersonId,
-            Integer sortNo,
-            Boolean enabled,
-            Boolean shared,
-            Integer lockVersion) {
+    /**
+     * {@code parentIdSpecified} is true only when the JSON contains {@code parentId}.
+     * Omitting it on update leaves the parent unchanged; an explicit null moves the node to the root.
+     */
+    public static final class DeptWrite {
+        private String code;
+        private String name;
+        private UUID parentId;
+        private boolean parentIdSpecified;
+        private UUID leaderPersonId;
+        private Integer sortNo;
+        private Boolean enabled;
+        private Boolean shared;
+        private Integer lockVersion;
+
+        public String code() {
+            return code;
+        }
+
+        public void setCode(String code) {
+            this.code = code;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public UUID parentId() {
+            return parentId;
+        }
+
+        public void setParentId(UUID parentId) {
+            this.parentId = parentId;
+            this.parentIdSpecified = true;
+        }
+
+        public boolean parentIdSpecified() {
+            return parentIdSpecified;
+        }
+
+        public UUID leaderPersonId() {
+            return leaderPersonId;
+        }
+
+        public void setLeaderPersonId(UUID leaderPersonId) {
+            this.leaderPersonId = leaderPersonId;
+        }
+
+        public Integer sortNo() {
+            return sortNo;
+        }
+
+        public void setSortNo(Integer sortNo) {
+            this.sortNo = sortNo;
+        }
+
+        public Boolean enabled() {
+            return enabled;
+        }
+
+        public void setEnabled(Boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Boolean shared() {
+            return shared;
+        }
+
+        public void setShared(Boolean shared) {
+            this.shared = shared;
+        }
+
+        public Integer lockVersion() {
+            return lockVersion;
+        }
+
+        public void setLockVersion(Integer lockVersion) {
+            this.lockVersion = lockVersion;
+        }
     }
 
     public record DeptMove(UUID parentId, Integer lockVersion) {

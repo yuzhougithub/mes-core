@@ -1,5 +1,6 @@
 -- =====================================================================
--- V6：F3 部门、岗位与数据范围（docs/v1-foundation.md §3.1 / §4.3 / §5）。
+-- V7：F3 部门、岗位与数据范围（docs/v1-foundation.md §3.1 / §4.3 / §5）。
+-- 排在 V6（厂级 ADMIN 去掉全局写权限点）之后。岗位的创建/修改/删除是全局写，不授给 ADMIN。
 -- 部门树按工厂；plant_id 空 = 集团级部门。岗位全局。
 -- 人员主部门 org_person.dept_id，岗位多对多 org_person_post。
 -- 角色 CUSTOM 的部门集合 sys_role_data_dept。
@@ -128,7 +129,8 @@ CREATE CONSTRAINT TRIGGER trg_org_dept_no_cycle
     EXECUTE FUNCTION mes_dept_no_cycle();
 
 -- ---------------------------------------------------------------------
--- 菜单种子：部门、岗位。ADMIN 持有全部新权限点。EDITOR / VIEWER 规格未列，不授。
+-- 菜单种子：部门、岗位。ADMIN 持有本厂部门的全部权限点和岗位的读权限。
+-- 岗位写是 global，不授给 ADMIN。EDITOR / VIEWER 不授部门与岗位。
 -- ---------------------------------------------------------------------
 
 INSERT INTO sys_menu (id, parent_id, type, name, perm_code, path, component, sort_no) VALUES
@@ -159,6 +161,6 @@ SELECT r.id, m.id
   FROM org_role r
   JOIN sys_menu m ON NOT m.deleted AND m.perm_code IN (
         'org:dept:list', 'org:dept:view', 'org:dept:create', 'org:dept:update', 'org:dept:delete',
-        'org:post:list', 'org:post:view', 'org:post:create', 'org:post:update', 'org:post:delete'
+        'org:post:list', 'org:post:view'
   )
  WHERE r.code = 'ADMIN' AND NOT r.deleted;

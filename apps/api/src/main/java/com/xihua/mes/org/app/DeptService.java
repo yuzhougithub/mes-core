@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.xihua.mes.auth.CurrentContext;
+import com.xihua.mes.auth.UserAdminGuard;
 import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
@@ -38,11 +39,13 @@ public class DeptService {
     private final DeptMapper depts;
     private final PersonMapper persons;
     private final JdbcTemplate jdbc;
+    private final UserAdminGuard guard;
 
-    public DeptService(DeptMapper depts, PersonMapper persons, JdbcTemplate jdbc) {
+    public DeptService(DeptMapper depts, PersonMapper persons, JdbcTemplate jdbc, UserAdminGuard guard) {
         this.depts = depts;
         this.persons = persons;
         this.jdbc = jdbc;
+        this.guard = guard;
     }
 
     public List<DeptNode> tree() {
@@ -69,6 +72,9 @@ public class DeptService {
         lockTree();
         requireBody(req);
         Draft draft = draft(req, true);
+        if (draft.plantId() == null) {
+            requireGroupWriter("org:dept:create");
+        }
         Dept parent = resolveParent(null, draft.parentId(), draft.plantId());
         Dept row = new Dept();
         row.setId(UUID.randomUUID());
@@ -95,9 +101,14 @@ public class DeptService {
         lockTree();
         requireBody(req);
         Dept row = require(id);
+        if (row.getPlantId() == null) {
+            requireGroupWriter("org:dept:update");
+        }
         Locks.check(req.lockVersion(), row.getLockVersion());
         Draft draft = draft(req, false);
-        applyParent(row, draft.parentId());
+        if (req.parentIdSpecified()) {
+            applyParent(row, req.parentId());
+        }
         row.setName(draft.name());
         row.setLeaderPersonId(draft.leaderPersonId());
         row.setSortNo(draft.sortNo());
@@ -111,6 +122,9 @@ public class DeptService {
         lockTree();
         requireBody(req);
         Dept row = require(id);
+        if (row.getPlantId() == null) {
+            requireGroupWriter("org:dept:update");
+        }
         Locks.check(req.lockVersion(), row.getLockVersion());
         applyParent(row, req.parentId());
         Locks.requireUpdated(depts.updateById(row));
@@ -121,6 +135,9 @@ public class DeptService {
     public void delete(UUID id, Integer lockVersion) {
         lockTree();
         Dept row = require(id);
+        if (row.getPlantId() == null) {
+            requireGroupWriter("org:dept:delete");
+        }
         Locks.check(lockVersion, row.getLockVersion());
         if (depts.childCount(id) > 0 || depts.personCount(id) > 0) {
             throw ApiException.deptNotEmpty();
@@ -201,6 +218,13 @@ public class DeptService {
             throw ApiException.notFound("部门");
         }
         return row;
+    }
+
+    /** Group-level departments ({@code plant_id} null) are superadmin-only. Plant departments are not. */
+    private void requireGroupWriter(String perm) {
+        if (!guard.superAdmin()) {
+            throw ApiException.permissionDenied(perm);
+        }
     }
 
     private void lockTree() {

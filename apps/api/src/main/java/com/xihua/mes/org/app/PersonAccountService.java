@@ -14,6 +14,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.xihua.mes.auth.CurrentContext;
 import com.xihua.mes.auth.PlantDirectory;
 import com.xihua.mes.common.error.ApiException;
+import com.xihua.mes.common.persistence.DataScopeHolder;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
 import com.xihua.mes.common.error.FieldError;
@@ -56,11 +57,13 @@ public class PersonAccountService {
     }
 
     public Person require(UUID id) {
-        Person person = persons.selectById(id);
-        if (person == null) {
-            throw ApiException.notFound("人员");
-        }
-        return person;
+        return DataScopeHolder.supplyUnscoped(() -> {
+            Person person = persons.selectById(id);
+            if (person == null) {
+                throw ApiException.notFound("人员");
+            }
+            return person;
+        });
     }
 
     public Person findByCode(String code) {
@@ -73,7 +76,7 @@ public class PersonAccountService {
     }
 
     public List<UUID> postIds(UUID personId) {
-        return personPosts.postIds(personId);
+        return DataScopeHolder.supplyUnscoped(() -> personPosts.postIds(personId));
     }
 
     @Transactional
@@ -105,7 +108,7 @@ public class PersonAccountService {
             assertDept(deptId);
             person.setDeptId(deptId);
         }
-        if (persons.updateById(person) != 1) {
+        if (DataScopeHolder.supplyUnscoped(() -> persons.updateById(person)) != 1) {
             throw ApiException.staleVersion();
         }
     }
@@ -120,11 +123,14 @@ public class PersonAccountService {
                         new FieldError("postIds", ErrorCodes.INVALID_VALUE, "岗位不存在")));
             }
         }
-        personPosts.deleteByPerson(personId);
         UUID actor = CurrentContext.userUuid();
-        for (UUID postId : ids) {
-            personPosts.insert(personId, postId, actor);
-        }
+        DataScopeHolder.supplyUnscoped(() -> {
+            personPosts.deleteByPerson(personId);
+            for (UUID postId : ids) {
+                personPosts.insert(personId, postId, actor);
+            }
+            return null;
+        });
     }
 
     private void assertDept(UUID deptId) {
@@ -145,7 +151,8 @@ public class PersonAccountService {
 
     @Transactional
     public void logicalDelete(UUID id) {
-        int rows = persons.update(null, new UpdateWrapper<Person>().set("deleted", true).eq("id", id));
+        int rows = DataScopeHolder.supplyUnscoped(() -> persons.update(null,
+                new UpdateWrapper<Person>().set("deleted", true).eq("id", id)));
         if (rows != 1) {
             throw ApiException.notFound("人员");
         }

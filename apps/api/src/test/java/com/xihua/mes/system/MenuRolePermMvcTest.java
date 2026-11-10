@@ -528,7 +528,8 @@ class MenuRolePermMvcTest extends PgIntegrationTest {
                 Arguments.of("POST", "/api/v1/roles"),
                 Arguments.of("PUT", "/api/v1/roles/{id}"),
                 Arguments.of("DELETE", "/api/v1/roles/{id}"),
-                Arguments.of("PUT", "/api/v1/roles/{id}/menus"));
+                Arguments.of("PUT", "/api/v1/roles/{id}/menus"),
+                Arguments.of("PUT", "/api/v1/roles/{id}/data-scope"));
     }
 
     @Test

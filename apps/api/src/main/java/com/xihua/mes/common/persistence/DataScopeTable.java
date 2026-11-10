@@ -12,11 +12,8 @@ public enum DataScopeTable {
 
     /** Direct {@code dept_id}; self column is {@code created_by}. */
     ORG_PERSON("org_person", DeptBinding.COLUMN, "dept_id", "created_by"),
-    /**
-     * Department comes from {@code org_person.dept_id}. The spec does not name a self column;
-     * the general rule {@code created_by = current user} is used.
-     */
-    SYS_USER("sys_user", DeptBinding.VIA_PERSON, null, "created_by"),
+    /** Department comes from {@code org_person.dept_id}. Self is the account itself ({@code id}). */
+    SYS_USER("sys_user", DeptBinding.VIA_PERSON, null, "id"),
     /** Self column only. Department scopes do not apply. */
     SYS_OPER_LOG("sys_oper_log", DeptBinding.NONE, null, "user_id");
 

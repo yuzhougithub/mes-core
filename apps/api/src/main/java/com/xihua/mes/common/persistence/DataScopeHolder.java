@@ -2,11 +2,12 @@ package com.xihua.mes.common.persistence;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.function.Supplier;
 
 /** Stack of {@link DataScope} / {@link CrossPlant} frames for the current thread. */
 public final class DataScopeHolder {
 
-    private record Frame(String alias, boolean scope, boolean cross) {
+    private record Frame(String alias, boolean scope, boolean cross, boolean suppress) {
     }
 
     private static final ThreadLocal<Deque<Frame>> STACK = new ThreadLocal<>();
@@ -20,7 +21,38 @@ public final class DataScopeHolder {
             stack = new ArrayDeque<>();
             STACK.set(stack);
         }
-        stack.push(new Frame(alias, scope, cross));
+        stack.push(new Frame(alias, scope, cross, false));
+    }
+
+    /**
+     * The user aggregate loads and updates {@code org_person} after {@code sys_user} was already
+     * filtered. That follow-up must not apply a second self column ({@code created_by}).
+     */
+    public static <T> T supplyUnscoped(Supplier<T> supplier) {
+        Deque<Frame> stack = STACK.get();
+        if (stack == null) {
+            stack = new ArrayDeque<>();
+            STACK.set(stack);
+        }
+        stack.push(new Frame(null, false, false, true));
+        try {
+            return supplier.get();
+        } finally {
+            pop();
+        }
+    }
+
+    public static boolean suppressed() {
+        Deque<Frame> stack = STACK.get();
+        if (stack == null) {
+            return false;
+        }
+        for (Frame frame : stack) {
+            if (frame.suppress()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void pop() {

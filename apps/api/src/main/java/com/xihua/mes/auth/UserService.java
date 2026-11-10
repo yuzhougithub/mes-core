@@ -37,6 +37,7 @@ import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
 import com.xihua.mes.common.error.FieldError;
 import com.xihua.mes.common.persistence.DataScope;
+import com.xihua.mes.common.persistence.DataScopeHolder;
 import com.xihua.mes.common.web.Locks;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
@@ -409,11 +410,13 @@ public class UserService {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        Map<UUID, Person> people = new HashMap<>();
-        for (Person person : persons.selectByIds(ids)) {
-            people.put(person.getId(), person);
-        }
-        return people;
+        return DataScopeHolder.supplyUnscoped(() -> {
+            Map<UUID, Person> people = new HashMap<>();
+            for (Person person : persons.selectByIds(ids)) {
+                people.put(person.getId(), person);
+            }
+            return people;
+        });
     }
 
     private static Set<UUID> roleIdsOf(List<AssignmentDraft> drafts) {
