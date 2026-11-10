@@ -172,8 +172,6 @@ export function AdminShell() {
           <div className="mes-breadcrumb">
             {item.breadcrumb.join(' / ')}
           </div>
-          <h1 className="mes-title">{item.title}</h1>
-          <p className="mes-subtitle">{item.subtitle}</p>
           {item.key === 'materials' ? <MaterialListPage /> : <Placeholder item={item} />}
         </main>
       </div>
