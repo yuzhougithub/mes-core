@@ -12,7 +12,7 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
 
-/** Global person. F1 accounts are strictly one-to-one with this row. Department arrives in F3. */
+/** Global person. One account each. {@code deptId} is the primary department (F3). */
 @TableName("org_person")
 public class Person {
 
@@ -34,6 +34,10 @@ public class Person {
 
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
+
+    /** Primary department. Null clears it. Group-level and current-plant departments are both valid. */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private UUID deptId;
 
     @Version
     private Integer lockVersion;
@@ -104,6 +108,14 @@ public class Person {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public UUID getDeptId() {
+        return deptId;
+    }
+
+    public void setDeptId(UUID deptId) {
+        this.deptId = deptId;
     }
 
     public Integer getLockVersion() {

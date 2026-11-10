@@ -17,10 +17,14 @@ import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
 import com.xihua.mes.common.error.FieldError;
+import com.xihua.mes.org.domain.Dept;
 import com.xihua.mes.org.domain.Person;
 import com.xihua.mes.org.infra.AssignmentRow;
+import com.xihua.mes.org.infra.DeptMapper;
 import com.xihua.mes.org.infra.PersonMapper;
 import com.xihua.mes.org.infra.PersonPlantMapper;
+import com.xihua.mes.org.infra.PersonPostMapper;
+import com.xihua.mes.org.infra.PostMapper;
 
 /**
  * Person rows owned by the account API. Creating or deleting a person without its account is
@@ -32,11 +36,23 @@ public class PersonAccountService {
     private final PersonMapper persons;
     private final PersonPlantMapper assignments;
     private final PlantDirectory plants;
+    private final DeptMapper depts;
+    private final PostMapper posts;
+    private final PersonPostMapper personPosts;
 
-    public PersonAccountService(PersonMapper persons, PersonPlantMapper assignments, PlantDirectory plants) {
+    public PersonAccountService(
+            PersonMapper persons,
+            PersonPlantMapper assignments,
+            PlantDirectory plants,
+            DeptMapper depts,
+            PostMapper posts,
+            PersonPostMapper personPosts) {
         this.persons = persons;
         this.assignments = assignments;
         this.plants = plants;
+        this.depts = depts;
+        this.posts = posts;
+        this.personPosts = personPosts;
     }
 
     public Person require(UUID id) {
@@ -56,8 +72,13 @@ public class PersonAccountService {
         return Boolean.TRUE.equals(enabled);
     }
 
+    public List<UUID> postIds(UUID personId) {
+        return personPosts.postIds(personId);
+    }
+
     @Transactional
-    public Person insert(String code, String name, String mobile, String email, String remark) {
+    public Person insert(String code, String name, String mobile, String email, String remark, UUID deptId) {
+        assertDept(deptId);
         Person person = new Person();
         person.setId(UUID.randomUUID());
         person.setCode(code);
@@ -66,6 +87,7 @@ public class PersonAccountService {
         person.setEmail(email);
         person.setEnabled(true);
         person.setRemark(remark);
+        person.setDeptId(deptId);
         person.setLockVersion(0);
         person.setDeleted(false);
         persons.insert(person);
@@ -73,13 +95,51 @@ public class PersonAccountService {
     }
 
     @Transactional
-    public void updateProfile(Person person, String name, String mobile, String email, String remark) {
+    public void updateProfile(
+            Person person, String name, String mobile, String email, String remark, boolean changeDept, UUID deptId) {
         person.setName(name);
         person.setMobile(mobile);
         person.setEmail(email);
         person.setRemark(remark);
+        if (changeDept) {
+            assertDept(deptId);
+            person.setDeptId(deptId);
+        }
         if (persons.updateById(person) != 1) {
             throw ApiException.staleVersion();
+        }
+    }
+
+    @Transactional
+    public void replacePosts(UUID personId, List<UUID> postIds) {
+        List<UUID> ids = distinctRoles(postIds);
+        if (!ids.isEmpty()) {
+            List<UUID> found = posts.existingIds(ids);
+            if (found.size() != ids.size()) {
+                throw ApiException.validation(List.of(
+                        new FieldError("postIds", ErrorCodes.INVALID_VALUE, "岗位不存在")));
+            }
+        }
+        personPosts.deleteByPerson(personId);
+        UUID actor = CurrentContext.userUuid();
+        for (UUID postId : ids) {
+            personPosts.insert(personId, postId, actor);
+        }
+    }
+
+    private void assertDept(UUID deptId) {
+        if (deptId == null) {
+            return;
+        }
+        Dept dept = depts.findAny(deptId);
+        if (dept == null) {
+            throw ApiException.validation(List.of(
+                    new FieldError("deptId", ErrorCodes.INVALID_VALUE, "部门不存在")));
+        }
+        UUID plantId = CurrentContext.requirePlantUuid();
+        if (dept.getPlantId() != null && !plantId.equals(dept.getPlantId())) {
+            throw ApiException.unprocessable(ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂",
+                    List.of(new FieldError("deptId", ErrorCodes.CROSS_PLANT_REFERENCE, "部门不属于当前工厂")));
         }
     }
 

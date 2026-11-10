@@ -8,8 +8,9 @@ import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.OptimisticLockerInnerInterceptor;
 
 /**
- * MyBatis-Plus wiring. Order: plant row filter → optimistic lock.
- * List paging is done with explicit COUNT + LIMIT/OFFSET (both pass through the plant filter).
+ * MyBatis-Plus wiring. Order: data scope → plant row filter → optimistic lock.
+ * Data scope is ahead of pagination (there is no pagination interceptor; lists use COUNT + LIMIT).
+ * Both data scope and the plant filter apply to the same statement.
  */
 @Configuration
 @MapperScan(basePackages = "com.xihua.mes", annotationClass = org.apache.ibatis.annotations.Mapper.class)
@@ -18,6 +19,7 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new DataScopeInnerInterceptor());
         interceptor.addInnerInterceptor(new PlantLineInnerInterceptor());
         interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
         return interceptor;

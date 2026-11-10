@@ -1,5 +1,6 @@
 package com.xihua.mes.system.app;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,13 +26,16 @@ import com.xihua.mes.common.error.FieldError;
 import com.xihua.mes.common.web.Locks;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
+import com.xihua.mes.org.infra.DeptMapper;
 import com.xihua.mes.system.api.RoleDtos.RoleCreate;
+import com.xihua.mes.system.api.RoleDtos.RoleDataScope;
 import com.xihua.mes.system.api.RoleDtos.RoleMenus;
 import com.xihua.mes.system.api.RoleDtos.RoleUpdate;
 import com.xihua.mes.system.api.RoleDtos.RoleView;
 import com.xihua.mes.system.domain.OrgRole;
 import com.xihua.mes.system.domain.SysMenu;
 import com.xihua.mes.system.infra.MenuMapper;
+import com.xihua.mes.system.infra.RoleDataDeptMapper;
 import com.xihua.mes.system.infra.RoleMapper;
 import com.xihua.mes.system.infra.RoleMenuMapper;
 
@@ -46,7 +50,9 @@ public class RoleService {
 
     private final RoleMapper roles;
     private final RoleMenuMapper roleMenus;
+    private final RoleDataDeptMapper roleDepts;
     private final MenuMapper menus;
+    private final DeptMapper depts;
     private final PermVersions versions;
     private final PermissionService permissions;
     private final UserAdminGuard guard;
@@ -54,13 +60,17 @@ public class RoleService {
     public RoleService(
             RoleMapper roles,
             RoleMenuMapper roleMenus,
+            RoleDataDeptMapper roleDepts,
             MenuMapper menus,
+            DeptMapper depts,
             PermVersions versions,
             PermissionService permissions,
             UserAdminGuard guard) {
         this.roles = roles;
         this.roleMenus = roleMenus;
+        this.roleDepts = roleDepts;
         this.menus = menus;
+        this.depts = depts;
         this.versions = versions;
         this.permissions = permissions;
         this.guard = guard;
@@ -184,6 +194,53 @@ public class RoleService {
         }
         versions.bumpRole(id);
         return roleMenus.menuIds(id);
+    }
+
+    /**
+     * Replaces {@code data_scope} and, for {@code CUSTOM}, the department set.
+     * Any other scope clears the set. The spec does not say what to do with {@code deptIds}
+     * when the scope is not {@code CUSTOM}; they are ignored.
+     */
+    @Transactional
+    public RoleDataScope replaceDataScope(UUID id, RoleDataScope req) {
+        requireBody(req);
+        OrgRole row = require(id);
+        Errors errors = new Errors();
+        String scope = dataScope(errors, req.dataScope(), null);
+        if (blank(req.dataScope()) == null) {
+            errors.add("dataScope", ErrorCodes.REQUIRED, "dataScope 必填");
+        }
+        errors.throwIfAny();
+        List<UUID> deptIds = List.of();
+        if ("CUSTOM".equals(scope)) {
+            deptIds = req.deptIds() == null ? List.of() : req.deptIds().stream()
+                    .filter(Objects::nonNull).distinct().toList();
+            for (UUID deptId : deptIds) {
+                if (depts.findAny(deptId) == null) {
+                    throw ApiException.validation(List.of(
+                            new FieldError("deptIds", ErrorCodes.INVALID_VALUE, "部门不存在")));
+                }
+            }
+        }
+        List<UUID> previous = roleDepts.deptIds(id);
+        boolean scopeChanged = !Objects.equals(row.getDataScope(), scope);
+        boolean deptsChanged = !new HashSet<>(previous).equals(new HashSet<>(deptIds));
+        if ((scopeChanged || deptsChanged) && holds(id)) {
+            throw ApiException.permissionDenied("sys:role:update");
+        }
+        row.setDataScope(scope);
+        Locks.requireUpdated(roles.updateById(row));
+        roleDepts.deleteByRole(id);
+        if ("CUSTOM".equals(scope)) {
+            UUID actor = CurrentContext.userUuid();
+            for (UUID deptId : deptIds) {
+                roleDepts.insert(id, deptId, actor);
+            }
+        }
+        if (scopeChanged || deptsChanged) {
+            versions.bumpRole(id);
+        }
+        return new RoleDataScope(scope, "CUSTOM".equals(scope) ? deptIds : List.of());
     }
 
     private boolean holds(UUID roleId) {

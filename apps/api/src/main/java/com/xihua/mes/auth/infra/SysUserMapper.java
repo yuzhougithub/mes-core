@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.xihua.mes.auth.domain.SysUser;
 
@@ -144,4 +145,13 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
              WHERE super_admin AND status = 'ACTIVE' AND NOT deleted AND id <> #{id}
             """)
     int otherActiveSuperAdmins(UUID id);
+
+    /** Department changes the permission snapshot. Ignore data scope so the bump is not filtered out. */
+    @InterceptorIgnore(dataPermission = "true")
+    @Update("""
+            UPDATE sys_user
+               SET perm_version = perm_version + 1, updated_at = #{now}
+             WHERE id = #{id} AND NOT deleted
+            """)
+    int bumpPerm(@Param("id") UUID id, @Param("now") OffsetDateTime now);
 }

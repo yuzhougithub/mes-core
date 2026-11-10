@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -35,6 +36,7 @@ import com.xihua.mes.common.error.ApiException;
 import com.xihua.mes.common.error.ErrorCodes;
 import com.xihua.mes.common.error.Errors;
 import com.xihua.mes.common.error.FieldError;
+import com.xihua.mes.common.persistence.DataScope;
 import com.xihua.mes.common.web.Locks;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
@@ -82,6 +84,7 @@ public class UserService {
         this.clock = clock;
     }
 
+    @DataScope
     public PageResult<UserSummary> list(PageQuery page, String q, String status) {
         QueryWrapper<SysUser> qw = new QueryWrapper<>();
         if (status != null && !status.isBlank()) {
@@ -120,6 +123,7 @@ public class UserService {
         return new PageResult<>(items, page.page(), page.size(), total);
     }
 
+    @DataScope
     public UserDetail get(UUID id) {
         SysUser user = require(id);
         requireInCurrentPlant(user);
@@ -167,7 +171,10 @@ public class UserService {
         boolean generated = req.password() == null || req.password().isBlank();
         String password = generated ? PasswordPolicy.generate(username, policy) : req.password();
         PasswordPolicy.check(password, username, policy);
-        Person person = accounts.insert(code, name, mobile, email, remark);
+        Person person = accounts.insert(code, name, mobile, email, remark, req.deptId());
+        if (req.postIds() != null && !req.postIds().isEmpty()) {
+            accounts.replacePosts(person.getId(), req.postIds());
+        }
         UUID defaultPlant = accounts.replaceAssignments(person.getId(), createPlants);
         SysUser user = new SysUser();
         user.setId(UUID.randomUUID());
@@ -186,6 +193,7 @@ public class UserService {
         return detail(require(user.getId()), generated ? password : null);
     }
 
+    @DataScope
     @Transactional
     public UserDetail update(UUID id, UserUpdate req) {
         requireBody(req);
@@ -211,10 +219,21 @@ public class UserService {
         if (users.updateUsername(id, username, user.getLockVersion(), now()) != 1) {
             throw ApiException.staleVersion();
         }
-        accounts.updateProfile(accounts.require(user.getPersonId()), name, mobile, email, remark);
+        Person person = accounts.require(user.getPersonId());
+        UUID previousDept = person.getDeptId();
+        boolean changeDept = req.org() != null;
+        accounts.updateProfile(person, name, mobile, email, remark, changeDept,
+                changeDept ? req.org().deptId() : null);
+        if (changeDept) {
+            accounts.replacePosts(person.getId(), req.org().postIds());
+            if (!Objects.equals(previousDept, req.org().deptId())) {
+                users.bumpPerm(id, now());
+            }
+        }
         return detail(require(id), null);
     }
 
+    @DataScope
     @Transactional
     public void delete(UUID id, Integer lockVersion) {
         SysUser user = require(id);
@@ -235,6 +254,7 @@ public class UserService {
         accounts.logicalDelete(user.getPersonId());
     }
 
+    @DataScope
     @Transactional
     public UserDetail setStatus(UUID id, Integer lockVersion, String status) {
         SysUser user = require(id);
@@ -259,6 +279,7 @@ public class UserService {
         return detail(require(id), null);
     }
 
+    @DataScope
     @Transactional
     public UserDetail unlock(UUID id, Integer lockVersion) {
         SysUser user = require(id);
@@ -272,6 +293,7 @@ public class UserService {
         return detail(require(id), null);
     }
 
+    @DataScope
     @Transactional
     public PasswordReset resetPassword(UUID id, ResetPassword req) {
         requireBody(req);
@@ -295,6 +317,7 @@ public class UserService {
         return new PasswordReset(generated ? password : null, true);
     }
 
+    @DataScope
     @Transactional
     public UserDetail replacePlants(UUID id, PlantReplace req) {
         requireBody(req);
@@ -371,7 +394,8 @@ public class UserService {
                 user.getLockVersion() == null ? 0 : user.getLockVersion(),
                 new PersonView(person.getId(), person.getCode(), person.getName(), person.getMobile(),
                         person.getEmail(), Boolean.TRUE.equals(person.getEnabled()), person.getRemark(),
-                        person.getLockVersion() == null ? 0 : person.getLockVersion()),
+                        person.getLockVersion() == null ? 0 : person.getLockVersion(),
+                        person.getDeptId(), accounts.postIds(person.getId())),
                 plants, user.getCreatedAt(), user.getUpdatedAt(), initialPassword);
     }
 

@@ -21,6 +21,7 @@ import com.xihua.mes.auth.RequiresPerm;
 import com.xihua.mes.common.web.PageQuery;
 import com.xihua.mes.common.web.PageResult;
 import com.xihua.mes.system.api.RoleDtos.RoleCreate;
+import com.xihua.mes.system.api.RoleDtos.RoleDataScope;
 import com.xihua.mes.system.api.RoleDtos.RoleMenus;
 import com.xihua.mes.system.api.RoleDtos.RoleUpdate;
 import com.xihua.mes.system.api.RoleDtos.RoleView;
@@ -78,5 +79,11 @@ public class RoleController {
     @RequiresPerm(value = "sys:role:grant", global = true)
     public RoleMenus replaceMenus(@PathVariable UUID id, @RequestBody(required = false) RoleMenus req) {
         return new RoleMenus(roles.replaceMenus(id, req));
+    }
+
+    @PutMapping("/{id}/data-scope")
+    @RequiresPerm(value = "sys:role:update", global = true)
+    public RoleDataScope replaceDataScope(@PathVariable UUID id, @RequestBody(required = false) RoleDataScope req) {
+        return roles.replaceDataScope(id, req);
     }
 }

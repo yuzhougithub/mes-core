@@ -21,6 +21,10 @@ public final class UserDtos {
             List<UUID> roleIds) {
     }
 
+    /** Replaces the person's department and posts. {@code deptId} null clears the department. */
+    public record OrgBinding(UUID deptId, List<UUID> postIds) {
+    }
+
     public record UserCreate(
             String username,
             String password,
@@ -30,6 +34,8 @@ public final class UserDtos {
             String email,
             String remark,
             Boolean superAdmin,
+            UUID deptId,
+            List<UUID> postIds,
             List<PlantBindingInput> plants) {
     }
 
@@ -39,7 +45,8 @@ public final class UserDtos {
             String mobile,
             String email,
             String remark,
-            Integer lockVersion) {
+            Integer lockVersion,
+            OrgBinding org) {
     }
 
     public record LockBody(Integer lockVersion) {
@@ -71,7 +78,9 @@ public final class UserDtos {
             String email,
             boolean enabled,
             String remark,
-            int lockVersion) {
+            int lockVersion,
+            UUID deptId,
+            List<UUID> postIds) {
     }
 
     public record UserSummary(
